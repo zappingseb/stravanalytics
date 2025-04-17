@@ -15,8 +15,8 @@ A web application for analyzing and visualizing Strava activity data. This tool 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/stravaVis.git
-cd stravaVis
+git clone https://github.com/zappingseb/stravanalytics.git
+cd stravanalytics
 ```
 
 2. Create a virtual environment and install dependencies:

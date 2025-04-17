@@ -1,0 +1,13 @@
+# docker-compose.yml
+version: '3'
+services:
+ strava:
+   build: .
+   ports:
+     - "5000:5000"
+   volumes:
+     - .:/app
+     - ./.env:/app/.env
+   environment:
+     - FLASK_DEBUG=1
+     - PYTHONUNBUFFERED=1

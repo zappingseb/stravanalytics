@@ -2,6 +2,8 @@
 
 A web application for analyzing and visualizing Strava activity data. This tool provides insights into your training performance, activity patterns, and progress over time.
 
+> **Note**: This entire codebase was generated using [Cursor.io](https://cursor.io), an AI-powered code editor. As such, no security guarantees are provided for the code, and users should exercise caution when using this application with their Strava data.
+
 ## Features
 
 - Interactive performance charts with rolling averages
@@ -49,6 +51,15 @@ python app.py
 ## Security Note
 
 Never commit your `.env` file or expose your Strava API credentials. The `.env` file is included in `.gitignore` for this reason.
+
+## Disclaimer
+
+This project was entirely generated using [Cursor.io](https://cursor.io), an AI-powered code editor. While the code has been tested for basic functionality, it comes with no security guarantees. Users should:
+
+- Review the code before using it with their Strava data
+- Be cautious with API credentials and personal data
+- Consider implementing additional security measures
+- Use at their own risk
 
 ## License
 

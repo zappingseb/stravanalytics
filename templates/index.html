@@ -166,6 +166,33 @@
     .progress-charts canvas.progress {
       max-width: 70%;
     }
+
+    .goal-calculations {
+      display: flex;
+      justify-content: space-between;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .goal-calculations .calc-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .goal-calculations .calc-label {
+      color: #666;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .goal-calculations .calc-value {
+      font-weight: bold;
+      color: #333;
+    }
   </style>
 </head>
 
@@ -196,6 +223,10 @@
 
   <div class="chart-container">
     <canvas id="performanceChart"></canvas>
+  </div>
+
+  <div class="goal-calculations" id="goalCalculations">
+    <!-- Content will be populated by JavaScript -->
   </div>
 
   <div class="progress-charts">
@@ -254,11 +285,17 @@
     };
     // Initialize date pickers and Select2
     $(document).ready(function () {
+      const currentYear = new Date().getFullYear();
+      const yearStart = `${currentYear}-01-01`;
+      const today = new Date().toISOString().split('T')[0];
+
       flatpickr("#fromDate", {
-        dateFormat: "Y-m-d"
+        dateFormat: "Y-m-d",
+        defaultDate: yearStart
       });
       flatpickr("#toDate", {
-        dateFormat: "Y-m-d"
+        dateFormat: "Y-m-d",
+        defaultDate: today
       });
 
       $('#activityTypes').select2({
@@ -266,7 +303,7 @@
         allowClear: true
       });
       // Pre-select Run
-      $('#activityTypes').val(['Run']).trigger('change');
+      $('#activityTypes').val(['Run', 'Hike', 'Walk']).trigger('change');
     });
 
     let runChart = null;
@@ -400,6 +437,71 @@
 
     }
 
+    function calculateGoalMetrics(data, fromDate, toDate, progressData) {
+      const today = new Date();
+      const yearStart = new Date(today.getFullYear(), 0, 1); // Jan 1st
+      const yearEnd = new Date(today.getFullYear(), 11, 31); // Dec 31st
+      const selectedEndDate = new Date(toDate);
+
+      // Calculate days elapsed since Jan 1st
+      const daysElapsed = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Calculate current daily pace
+      const currentPace = data.yearlyTotal / daysElapsed;
+
+      // Calculate days needed to reach goal at current pace
+      const remainingKm = data.yearlyGoal - data.yearlyTotal;
+      const daysNeededForGoal = Math.ceil(remainingKm / currentPace);
+
+      // Calculate remaining days until Dec 31st
+      const remainingDaysInYear = Math.floor((yearEnd - today) / (1000 * 60 * 60 * 24));
+
+      // Calculate illness days possible
+      const illnessDays = remainingDaysInYear - daysNeededForGoal;
+
+      // Calculate goal completion date
+      const goalCompletionDate = new Date(today);
+      goalCompletionDate.setDate(today.getDate() + daysNeededForGoal);
+
+      // Calculate goal line slope: a = yearlyGoal / days_in_year
+      const daysInYear = Math.floor((yearEnd - yearStart) / (1000 * 60 * 60 * 24)) + 1;
+      const goalSlope = data.yearlyGoal / daysInYear;
+
+      // Calculate goal at selected end date: goal_today = a * toDate + 0
+      const daysToSelectedEnd = Math.floor((selectedEndDate - yearStart) / (1000 * 60 * 60 * 24)) + 1;
+      const goalAtSelectedDate = goalSlope * daysToSelectedEnd;
+
+      // Find actual km at selected end date from progressData
+      let actualAtSelectedDate = 0;
+      const selectedEndDateObj = selectedEndDate;
+
+      // Find the closest date in progressData
+      for (const point of progressData) {
+        if (point.x.toDateString() === selectedEndDateObj.toDateString()) {
+          actualAtSelectedDate = point.y;
+          break;
+        }
+        // If exact match not found, use the last point that's <= selected date
+        if (point.x <= selectedEndDateObj) {
+          actualAtSelectedDate = point.y;
+        }
+      }
+
+      // Calculate difference: actual - goal at that date
+      const kmDifference = actualAtSelectedDate - goalAtSelectedDate;
+
+      return {
+        goalCompletionDate: goalCompletionDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }),
+        illnessDays: Math.max(0, illnessDays),
+        kmDifference: Math.round(kmDifference * 10) / 10,
+        selectedEndDate: selectedEndDate.toLocaleDateString('en-GB')
+      };
+    }
+
     function updateProgressCharts(data) {
       const goalDonutCtx = document.getElementById('goalDonut').getContext('2d');
       donutInstance = new Chart(goalDonutCtx, {
@@ -444,11 +546,88 @@
         };
       });
 
+      // Calculate linear regression (distance = a * date + 0, so intercept = 0)
+      let sumXY = 0;
+      let sumX2 = 0;
+
+      // Convert dates to days since first date for regression calculation
+      const firstDate = progressData[0].x;
+
+      progressData.forEach(point => {
+        const daysSinceStart = (point.x - firstDate) / (1000 * 60 * 60 * 24);
+        sumXY += daysSinceStart * point.y;
+        sumX2 += daysSinceStart * daysSinceStart;
+      });
+
+      // Calculate slope (a) for regression line through origin
+      const slope = sumXY / sumX2;
+
+      // Create regression line data
+      const regressionData = [];
+      const lastDate = progressData[progressData.length - 1].x;
+
+      // Extend regression line to end of year
+      const yearEnd = new Date(firstDate);
+      yearEnd.setFullYear(firstDate.getFullYear() + 1, 0, 0); // Dec 31st
+
+      const daysSinceStartForEnd = (yearEnd - firstDate) / (1000 * 60 * 60 * 24);
+      const projectedTotal = slope * daysSinceStartForEnd;
+
+      regressionData.push(
+        { x: firstDate, y: 0 },
+        { x: yearEnd, y: projectedTotal }
+      );
+
+      // Display projected total in top right corner
+      const chartContainer = progressCtx.canvas.parentElement;
+      let projectionDisplay = chartContainer.querySelector('.projection-display');
+      if (!projectionDisplay) {
+        projectionDisplay = document.createElement('div');
+        projectionDisplay.className = 'projection-display';
+        projectionDisplay.style.cssText = `
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(252, 76, 2, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      z-index: 1000;
+    `;
+        chartContainer.style.position = 'relative';
+        chartContainer.appendChild(projectionDisplay);
+      }
+      projectionDisplay.textContent = `Projected: ${Math.round(projectedTotal)} km`;
+
       // Calculate goal line points
       const yearStart = new Date(data.dates[0]);
       yearStart.setMonth(0, 1);  // January 1st
-      const yearEnd = new Date(yearStart);
-      yearEnd.setFullYear(yearStart.getFullYear() + 1);
+      const yearEndGoal = new Date(yearStart);
+      yearEndGoal.setFullYear(yearStart.getFullYear() + 1);
+
+      // Calculate and display goal metrics
+      const fromDate = document.getElementById('fromDate').value;
+      const toDate = document.getElementById('toDate').value;
+
+      if (fromDate && toDate) {
+        const metrics = calculateGoalMetrics(data, fromDate, toDate, progressData);
+
+        document.getElementById('goalCalculations').innerHTML = `
+    <div class="calc-item">
+      <div class="calc-label">Goal reached at:</div>
+      <div class="calc-value">${metrics.goalCompletionDate}</div>
+    </div>
+    <div class="calc-item">
+      <div class="calc-label">Illness days possible:</div>
+      <div class="calc-value">${metrics.illnessDays}</div>
+    </div>
+    <div class="calc-item">
+      <div class="calc-label">Km above/below goal at ${metrics.selectedEndDate}:</div>
+      <div class="calc-value" style="color: ${metrics.kmDifference >= 0 ? '#28a745' : '#dc3545'}">${metrics.kmDifference > 0 ? '+' : ''}${metrics.kmDifference}</div>
+    </div>
+  `;
+      }
 
       progressInstance = new Chart(progressCtx, {
         type: 'line',
@@ -459,7 +638,7 @@
               label: 'Goal Pace',
               data: [
                 { x: yearStart, y: 0 },
-                { x: yearEnd, y: data.yearlyGoal }
+                { x: yearEndGoal, y: data.yearlyGoal }
               ],
               borderColor: 'rgba(200, 200, 200, 0.5)',
               borderWidth: 2,
@@ -475,6 +654,16 @@
               borderWidth: 2,
               fill: true,
               tension: 0.1
+            },
+            {
+              // Linear regression line
+              label: 'Linear Trend',
+              data: regressionData,
+              borderColor: '#FF8C00',  // Darker orange for regression
+              borderWidth: 3,
+              pointRadius: 0,
+              fill: false,
+              tension: 0
             }
           ]
         },
@@ -505,6 +694,9 @@
             tooltip: {
               callbacks: {
                 label: function (context) {
+                  if (context.dataset.label === 'Linear Trend') {
+                    return `Trend: ${Math.round(context.parsed.y)} km`;
+                  }
                   return `${Math.round(context.parsed.y)} km`;
                 }
               }

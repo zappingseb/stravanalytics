@@ -332,7 +332,7 @@ def get_calendar_data():
                     'type': activity['type'],
                     'duration': f"{hours}h{minutes:02d}m",
                     'moving_time': activity['moving_time'],
-                    'distance': activity['distance'],
+                    'distance': activity['distance'] if (activity['type'] != 'WeightTraining' and activity['type'] != 'Workout') else 0,
                     'color': colors.get(activity['type'], '#999999')
                 })
             

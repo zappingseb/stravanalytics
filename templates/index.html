@@ -991,12 +991,11 @@
 
             if (activitiesByDate[dateString]) {
               activitiesByDate[dateString].forEach((activity, index) => {
-                activitiesByDate[dateString].forEach(activity => {
-                  currentWeekSum += activity.moving_time;
-                  console.log(activity.distance)
-                  currentWeekDistance += activity.distance;  // Add distance
-                });
+                // Add to week totals - do this once per activity
+                currentWeekSum += activity.moving_time;
+                currentWeekDistance += activity.distance;
 
+                // Create the visual circle
                 const circle = document.createElement('div');
                 circle.className = `activity-circle ${index === 1 ? 'secondary' : ''}`;
                 circle.style.backgroundColor = activity.color;
@@ -1005,17 +1004,18 @@
                 circle.style.width = `${size}%`;
                 circle.style.height = `${size}%`;
 
-                // Create container for icon and duration
                 const contentContainer = document.createElement('div');
                 contentContainer.className = 'circle-content';
                 contentContainer.innerHTML = `
-                      ${activityIcons[activity.type] || ''}
-                      <span>${activity.duration}</span>
-                  `;
+                  ${activityIcons[activity.type] || ''}
+                  <span>${activity.duration}</span>
+                `;
 
                 circle.appendChild(contentContainer);
                 dayElement.appendChild(circle);
               });
+
+
             }
 
 

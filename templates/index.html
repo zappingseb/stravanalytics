@@ -168,15 +168,22 @@
       font-size: medium;
     }
 
-    .hover-details div {
+    .hover-details>div {
       margin-bottom: 4px;
+      display: flex;
+      align-items: start;
+      flex-direction: column;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .hover-details div:first-of-type {
+      display: block;
       text-align: center;
     }
 
     .hover-details div:nth-of-type(2) {
+      display: block;
       text-align: center;
     }
 
@@ -285,16 +292,72 @@
       }
 
       .activity-circle.isOn {
-        position: fixed;
-        left: 50%;
-        width: 80vw !important;
-        height: 80vw !important;
+        width: 100% !important;
+        height: 100% !important;
       }
 
+      .activity-circle.isOn .hover-details {
+
+        z-index: 1000 !important;
+        background: inherit !important;
+        /* Use activity circle's background color */
+        border-radius: 100vh !important;
+        font-size: 16px !important;
+        min-width: 250px !important;
+        text-align: center !important;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+        width: 58vw;
+        height: 58vw;
+        display: flex !important;
+        ;
+        flex-direction: column;
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        justify-content: center;
+      }
+
+
+      .activity-circle:hover {
+        width: 100% !important;
+        ;
+        height: 100% !important;
+        ;
+        z-index: 1;
+        box-shadow: none;
+      }
+
+      .activity-circle:hover .hover-details {
+        display: none;
+      }
+
+      .activity-circle:hover .circle-content {
+        display: block;
+      }
+
+      .calendar-day:nth-child(8n-6) .hover-details {
+        left: 28vw;
+        top: 0;
+      }
+
+      .calendar-day:nth-child(8n-5) .hover-details {
+        left: 21vw;
+        top: 0;
+      }
+
+      .calendar-day:nth-child(8n) .hover-details {
+        left: auto;
+        right: -40vw;
+        top: 0;
+      }
+
+
+      /* Optional: Add backdrop */
+
       .activity-circle.isOn svg {
-        width: 50px;
-        height: 50px;
-        margin-top: -20px
+        width: 20px;
+        height: 30px;
+        margin-top: -10px
       }
 
       .circle-content span {
@@ -1212,11 +1275,11 @@
                 hoverDetails.className = 'hover-details';
                 hoverDetails.innerHTML = `
                 <div>${activityIcons[activity.type] || ''}</div>
-                <div><strong>${(activity.name ?? '').substring(0, 33)}</strong></div>
+                <div><strong>${(activity.name ?? '').substring(0, 33)}</strong></div><div>
     <div><strong>Activity Type:</strong> ${activity.type}</div>
     <div><strong>Duration:</strong> ${activity.duration}</div>
     <div><strong>Distance:</strong> ${parseFloat(activity.distance).toFixed(2)} km</div>
-    <div><strong>Height:</strong> ${parseFloat(activity.total_elevation_gain).toFixed(0)} m</div>
+    <div><strong>Height:</strong> ${parseFloat(activity.total_elevation_gain).toFixed(0)} m</div></div>
   `;
 
                 circle.appendChild(contentContainer);

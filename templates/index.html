@@ -393,8 +393,8 @@
   <h1>Strava Activity Analysis</h1>
 
   <div class="date-inputs">
-    <div><label>From:</label><input type="text" id="fromDate" placeholder="From Date"></div>
-    <div><label>To:</label><input type="text" id="toDate" placeholder="To Date"></div>
+    <div><label>After:</label><input type="text" id="fromDate" placeholder="From Date"></div>
+    <div><label>Before:</label><input type="text" id="toDate" placeholder="To Date"></div>
     <select id="activityTypes" multiple="multiple" style="width: 300px;">
       <option value="Run">Run</option>
       <option value="Ride">Ride</option>
@@ -540,7 +540,7 @@
     $(document).ready(function () {
       const currentYear = new Date().getFullYear();
       const yearStart = `${currentYear}-01-01`;
-      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       flatpickr("#fromDate", {
         dateFormat: "Y-m-d",
@@ -548,7 +548,7 @@
       });
       flatpickr("#toDate", {
         dateFormat: "Y-m-d",
-        defaultDate: today
+        defaultDate: tomorrow
       });
 
       $('#activityTypes').select2({

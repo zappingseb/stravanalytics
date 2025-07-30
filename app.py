@@ -19,7 +19,7 @@ CLIENT_SECRET = os.getenv('STRAVA_CLIENT_SECRET')
 
 colors = {
             'Run': '#FC4C02',      # Strava orange
-            'Run Stroller': '#FF8C69',  # Lighter orange for stroller runs
+            'RunStroller': '#FF8C69',  # Lighter orange for stroller runs
             'Ride': '#2D87C9',     # Blue
             'Swim': '#1BB6AF',     # Teal
             'Walk': '#7CB342',     # Green
@@ -142,7 +142,7 @@ def get_activities(access_token, after=None, before=None, activity_types=None):
                             # Determine if it's a stroller run
                             activity_type = activity['type']
                             if activity_type == 'Run' and 'Ausflug' in activity['name']:
-                                activity_type = 'Run Stroller'
+                                activity_type = 'RunStroller'
                                 
                             all_activities.append({
                                 'date': datetime.strptime(activity['start_date'][:10], '%Y-%m-%d'),
@@ -150,7 +150,8 @@ def get_activities(access_token, after=None, before=None, activity_types=None):
                                 'name': activity['name'],
                                 'type': activity_type,  # Use modified type
                                 'moving_time': activity['moving_time'] / 3600,  # Convert to hours
-                                'average_speed': (activity['distance'] / 1000) / (activity['moving_time'] / 3600)  # km/h
+                                'average_speed': (activity['distance'] / 1000) / (activity['moving_time'] / 3600),  # km/h,
+                                'total_elevation_gain': activity['total_elevation_gain']
                             })
                     
                     if len(chunk_activities) < 200:  # Last page for this chunk
@@ -199,7 +200,7 @@ def get_activities(access_token, after=None, before=None, activity_types=None):
                         # Determine if it's a stroller run
                         activity_type = activity['type']
                         if activity_type == 'Run' and 'Ausflug' in activity['name']:
-                            activity_type = 'Run Stroller'
+                            activity_type = 'RunStroller'
                             
                         all_activities.append({
                             'date': datetime.strptime(activity['start_date'][:10], '%Y-%m-%d'),
@@ -207,7 +208,8 @@ def get_activities(access_token, after=None, before=None, activity_types=None):
                             'name': activity['name'],
                             'type': activity_type,  # Use modified type
                             'moving_time': activity['moving_time'] / 3600,  # Convert to hours
-                            'average_speed': (activity['distance'] / 1000) / (activity['moving_time'] / 3600)  # km/h
+                            'average_speed': (activity['distance'] / 1000) / (activity['moving_time'] / 3600),  # km/h,
+                            'total_elevation_gain': activity['total_elevation_gain'] # m
                         })
                 
                 if len(activities) < 200:  # Last page
@@ -330,10 +332,12 @@ def get_calendar_data():
                 minutes = int((activity['moving_time'] - hours) * 60)
                 day_activities.append({
                     'type': activity['type'],
-                    'duration': f"{hours}h{minutes:02d}m",
+                    'duration': f"{hours}h {minutes:02d}m",
                     'moving_time': activity['moving_time'],
                     'distance': activity['distance'] if (activity['type'] != 'WeightTraining' and activity['type'] != 'Workout') else 0,
-                    'color': colors.get(activity['type'], '#999999')
+                    'color': colors.get(activity['type'], '#999999'),
+                    'total_elevation_gain': activity['total_elevation_gain'],
+                    'name': activity['name']
                 })
             
             calendar_data.append({

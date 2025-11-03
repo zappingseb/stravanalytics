@@ -399,6 +399,19 @@
         flex-direction: column;
       }
 
+      .progress-charts .chart-wrapper {
+        width: 100%;
+      }
+
+      .progress-charts .chart-container {
+        width: 100% !important;
+      }
+
+      .progress-charts canvas.progress {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+
       /* tests/chartscroll input */
 
       .legend-overlay {
@@ -688,7 +701,17 @@
   </div>
 
   <div class="progress-charts">
-    <canvas class="progress" id="progressChart"></canvas>
+    <div class="chart-wrapper">
+      <div class="chart-header" id="progressChartHeader" style="display: none;">
+        <h2 class="chart-title">Progress Over Time</h2>
+        <div class="chart-controls">
+          <button class="control-icon fullscreen-icon" id="resetProgressZoomBtn" title="Reset Zoom">⛶</button>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas class="progress" id="progressChart"></canvas>
+      </div>
+    </div>
     <div id="goalOverall">
 
       <div id="yearlyProgress" style="max-width: 70%"></div>
@@ -828,6 +851,10 @@
     let performanceChart = null;
     let progressInstance = null;
     let donutInstance = null;
+    let isLegendOpen = false;
+    let tooltipVisible = false;
+    const ZOOM_IN_DAY_RANGE = 60;
+    const chartYAxisMax = {}; // Store y-axis max per chart ID
 
     function destroyExistingChart() {
       if (runChart !== null) {
@@ -955,7 +982,7 @@
 
     }
 
-    function calculateGoalMetrics(data, fromDate, toDate, progressData) {
+    function calculateGoalMetrics(data, fromDate, toDate, progressData, slope, firstDate) {
       const today = new Date();
       const yearStart = new Date(today.getFullYear(), 0, 1); // Jan 1st
       const yearEnd = new Date(today.getFullYear(), 11, 31); // Dec 31st
@@ -964,12 +991,24 @@
       // Calculate days elapsed since Jan 1st
       const daysElapsed = Math.floor((today - yearStart) / (1000 * 60 * 60 * 24)) + 1;
 
-      // Calculate current daily pace
-      const currentPace = data.yearlyTotal / daysElapsed;
-
-      // Calculate days needed to reach goal at current pace
+      // Calculate remaining distance
       const remainingKm = data.yearlyGoal - data.yearlyTotal;
-      const daysNeededForGoal = Math.ceil(remainingKm / currentPace);
+      
+      let daysNeededForGoal;
+      
+      if (slope && slope > 0 && firstDate) {
+        // Using regression: y = slope * daysSinceFirstDate
+        // So: yearlyGoal = slope * daysFromFirstDateToGoal
+        // Therefore: daysFromFirstDateToGoal = yearlyGoal / slope
+        const daysFromFirstDateToGoal = data.yearlyGoal / slope;
+        const goalDate = new Date(firstDate.getTime() + daysFromFirstDateToGoal * (1000 * 60 * 60 * 24));
+        const daysFromTodayToGoal = Math.ceil((goalDate - today) / (1000 * 60 * 60 * 24));
+        daysNeededForGoal = Math.max(0, daysFromTodayToGoal); // Ensure non-negative
+      } else {
+        // Fallback to average pace
+        const currentPace = data.yearlyTotal / daysElapsed;
+        daysNeededForGoal = Math.ceil(remainingKm / currentPace);
+      }
 
       // Calculate remaining days until Dec 31st
       const remainingDaysInYear = Math.floor((yearEnd - today) / (1000 * 60 * 60 * 24));
@@ -1021,6 +1060,9 @@
     }
 
     function updateProgressCharts(data) {
+      // Check if device is mobile/touch
+      const isMobile = window.innerWidth <= 500 || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
       const goalDonutCtx = document.getElementById('goalDonut').getContext('2d');
       donutInstance = new Chart(goalDonutCtx, {
         type: 'doughnut',
@@ -1124,12 +1166,42 @@
       const yearEndGoal = new Date(yearStart);
       yearEndGoal.setFullYear(yearStart.getFullYear() + 1);
 
+      // Calculate max value for y-axis (max + 10%, minimum yearlyGoal * 1.1)
+      let maxYValue = 0;
+      progressData.forEach(point => {
+        if (point.y > maxYValue) maxYValue = point.y;
+      });
+      // Also check regression line endpoint
+      if (projectedTotal > maxYValue) maxYValue = projectedTotal;
+      // Ensure yearlyGoal is included
+      if (data.yearlyGoal > maxYValue) maxYValue = data.yearlyGoal;
+      // Set to max + 10%
+      const yAxisMax = Math.max(maxYValue * 1.1, data.yearlyGoal * 1.1);
+
+      // Calculate intersection point of regression line with yearlyGoal
+      // Regression: y = slope * daysSinceStart
+      // Goal: y = yearlyGoal
+      // Intersection: yearlyGoal = slope * daysSinceStart
+      let intersectionDate = null;
+      let intersectionPoint = null;
+      if (slope > 0) {
+        const daysSinceStart = data.yearlyGoal / slope;
+        intersectionDate = new Date(firstDate.getTime() + daysSinceStart * (1000 * 60 * 60 * 24));
+        
+        // Only show intersection if it's within the year range
+        const yearEnd = new Date(firstDate);
+        yearEnd.setFullYear(firstDate.getFullYear() + 1, 11, 31);
+        if (intersectionDate >= firstDate && intersectionDate <= yearEnd) {
+          intersectionPoint = { x: intersectionDate, y: data.yearlyGoal };
+        }
+      }
+
       // Calculate and display goal metrics
       const fromDate = document.getElementById('fromDate').value;
       const toDate = document.getElementById('toDate').value;
 
       if (fromDate && toDate) {
-        const metrics = calculateGoalMetrics(data, fromDate, toDate, progressData);
+        const metrics = calculateGoalMetrics(data, fromDate, toDate, progressData, slope, firstDate);
 
         document.getElementById('goalCalculations').innerHTML = `
     <div class="calc-item">
@@ -1182,16 +1254,81 @@
               pointRadius: 0,
               fill: false,
               tension: 0
-            }
+            },
+            // Horizontal goal line from intersection to right (if intersection exists)
+            ...(intersectionPoint ? [{
+              label: 'Goal Line',
+              data: [
+                { x: intersectionPoint.x, y: data.yearlyGoal },
+                { x: 0, y: data.yearlyGoal }
+              ],
+              borderColor: 'rgba(255, 140, 0, 0.6)',  // Orange
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false,
+              tension: 0
+            }] : []),
+            // Intersection point marker
+            ...(intersectionPoint ? [{
+              label: 'Goal Intersection',
+              data: [intersectionPoint],
+              borderColor: '#FF8C00',  // Orange
+              backgroundColor: '#FF8C00',
+              pointRadius: 6,
+              pointHoverRadius: 8,
+              pointStyle: 'circle',
+              showLine: false
+            }] : [])
           ]
         },
         options: {
-          aspectRatio: 3,
+          aspectRatio: isMobile ? undefined : 3,
+          responsive: true,
+          maintainAspectRatio: false,
           scales: {
             x: {
               type: 'time',
               time: {
-                unit: 'month'
+                unit: 'day',
+                stepSize: 5,
+                displayFormats: {
+                  day: 'MMM d',
+                  week: 'MMM d'
+                }
+              },
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 15,
+                callback: function(value, index, ticks) {
+                  // Adaptive tick display based on visible range
+                  const chart = this.chart;
+                  if (!chart || !chart.scales.x) return '';
+                  
+                  const scale = chart.scales.x;
+                  const range = scale.max - scale.min;
+                  const days = range / (24 * 60 * 60 * 1000);
+                  
+                  const date = new Date(value);
+                  
+                  // Show every tick for very small ranges
+                  if (days <= 10) {
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }
+                  // Show every 5th day for medium ranges
+                  if (days <= 30) {
+                    const dayOfMonth = date.getDate();
+                    if (dayOfMonth % 5 === 0 || index === 0 || index === ticks.length - 1) {
+                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
+                    return '';
+                  }
+                  // Show monthly for larger ranges
+                  if (days > 30) {
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                  }
+                  
+                  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
               },
               grid: {
                 display: false
@@ -1218,10 +1355,113 @@
                   return `${Math.round(context.parsed.y)} km`;
                 }
               }
+            },
+            zoom: {
+              limits: {
+                x: { min: 'original', max: 'original' }
+              },
+              pan: {
+                enabled: isMobile,
+                mode: 'x',
+                modifierKey: null,
+                threshold: 1,
+                onPanStart: function ({ chart }) {
+                  // Mark as panning and disable tooltip
+                  chart._isPanning = true;
+                  chart.options.plugins.tooltip.enabled = false;
+
+                  // Hide any existing tooltip
+                  chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                  chart.update('none');
+
+                  // Ensure chart is zoomed to show max 60 days if not already
+                  const scales = chart.scales.x;
+                  const range = scales.max - scales.min;
+                  const maxRange = ZOOM_IN_DAY_RANGE * 24 * 60 * 60 * 1000; // ZOOM_IN_DAY_RANGE days in ms
+
+                  if (range > maxRange) {
+                    // Auto-zoom to 60 days centered on current view
+                    const center = (scales.max + scales.min) / 2;
+                    chart.zoomScale('x', { min: center - maxRange / 2, max: center + maxRange / 2 }, 'none');
+                  }
+                },
+                onPanComplete: function ({ chart }) {
+                  // Re-enable tooltip after pan with delay
+                  setTimeout(() => {
+                    chart._isPanning = false;
+                    chart.options.plugins.tooltip.enabled = true;
+                  }, 200);
+                  
+                  // Set y-axis limits BEFORE update
+                  // Update time scale adaptively based on visible range
+                  updateAdaptiveTimeScale(chart);
+                  chart.update('none');
+                  
+                }
+              },
+              zoom: {
+                wheel: {
+                  enabled: false
+                },
+                pinch: {
+                  enabled: isMobile
+                },
+                mode: 'x',
+                onZoomComplete: function ({ chart }) {
+                  // Limit visible range to ~60 days worth
+                  const scales = chart.scales.x;
+                  const range = scales.max - scales.min;
+                  const maxRange = ZOOM_IN_DAY_RANGE * 24 * 60 * 60 * 1000; // ZOOM_IN_DAY_RANGE days in ms
+
+                  if (range > maxRange) {
+                    const center = (scales.max + scales.min) / 2;
+                    chart.zoomScale('x', { min: center - maxRange / 2, max: center + maxRange / 2 }, 'none');
+                  }
+                  
+                  // Update time scale adaptively based on visible range
+                  updateAdaptiveTimeScale(chart);
+                  chart.update('none');
+                }
+              }
             }
           }
         }
       });
+
+      // Store y-axis maximum value for later use
+      chartYAxisMax.progressChart =
+        progressInstance.options.scales &&
+        progressInstance.options.scales.y &&
+        typeof progressInstance.options.scales.y.max === 'number'
+          ? progressInstance.options.scales.y.max
+          : (progressInstance.scales && progressInstance.scales.y && typeof progressInstance.scales.y.max === 'number'
+              ? progressInstance.scales.y.max
+              : undefined);
+      // Show header and enable zoom on mobile
+      if (isMobile) {
+        document.getElementById('progressChartHeader').style.display = "block";
+        
+        // Ensure chart container takes 100% width on mobile
+        const chartWrapper = progressCtx.canvas.closest('.chart-wrapper');
+        const chartContainer = progressCtx.canvas.closest('.chart-container');
+        if (chartWrapper) {
+          chartWrapper.style.width = '100%';
+        }
+        if (chartContainer) {
+          chartContainer.style.width = '100%';
+        }
+        progressCtx.canvas.parentElement.style.width = '100%';
+        
+        // Auto-zoom to 100% width on mobile after chart is rendered
+        setTimeout(() => {
+          // Force chart resize to respect container width
+          if (progressInstance && progressInstance.chartArea) {
+            progressInstance.resize();
+            console.log('progressInstance', progressInstance, "full zoom");
+            autoZoomProgressToFullWidth();
+          }
+        }, 100);
+      }
     }
 
     function updatePerformanceChart(data) {
@@ -1230,6 +1470,9 @@
       if (performanceChart) {
         performanceChart.destroy();
       }
+
+      // Check if device is mobile/touch
+      const isMobile = window.innerWidth <= 500 || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
       // Transform the data to include dates
       const transformedDatasets = data.datasets.map(dataset => ({
@@ -1347,7 +1590,7 @@
                 x: { min: 'original', max: 'original' }
               },
               pan: {
-                enabled: true,
+                enabled: isMobile,
                 mode: 'x',
                 modifierKey: null,
                 threshold: 1,
@@ -1360,13 +1603,13 @@
                   chart.tooltip.setActiveElements([], { x: 0, y: 0 });
                   chart.update('none');
 
-                  // Ensure chart is zoomed to show max 30 days if not already
+                  // Ensure chart is zoomed to show max 60 days if not already
                   const scales = chart.scales.x;
                   const range = scales.max - scales.min;
-                  const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+                  const maxRange = ZOOM_IN_DAY_RANGE * 24 * 60 * 60 * 1000; // ZOOM_IN_DAY_RANGE days in ms
 
                   if (range > maxRange) {
-                    // Auto-zoom to 30 days centered on current view
+                    // Auto-zoom to 60 days centered on current view
                     const center = (scales.max + scales.min) / 2;
                     chart.zoomScale('x', { min: center - maxRange / 2, max: center + maxRange / 2 }, 'none');
                   }
@@ -1384,14 +1627,14 @@
                   enabled: false
                 },
                 pinch: {
-                  enabled: true
+                  enabled: isMobile
                 },
                 mode: 'x',
                 onZoomComplete: function ({ chart }) {
-                  // Limit visible range to ~30 days worth
+                  // Limit visible range to ~60 days worth
                   const scales = chart.scales.x;
                   const range = scales.max - scales.min;
-                  const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+                  const maxRange = ZOOM_IN_DAY_RANGE * 24 * 60 * 60 * 1000; // ZOOM_IN_DAY_RANGE days in ms
 
                   if (range > maxRange) {
                     const center = (scales.max + scales.min) / 2;
@@ -1406,6 +1649,7 @@
               type: 'time',
               time: {
                 unit: 'day',
+                stepSize: 5,
                 displayFormats: {
                   day: 'MMM d, yyyy'
                 }
@@ -1425,7 +1669,8 @@
                 display: true,
                 text: 'Performance Score'
               },
-              beginAtZero: true
+              beginAtZero: true,
+              max: chartYAxisMax.performanceChart !== undefined ? chartYAxisMax.performanceChart : undefined,
             }
           },
           elements: {
@@ -1457,17 +1702,30 @@
           }
         }
       });
+      
 
       document.getElementsByClassName('chart-header')[0].style.display = "block";
 
       // Update custom legend
       updateCustomLegend();
 
-      // Auto-zoom to 30-day window for immediate scrolling
-      autoZoomToScrollableRange();
+      // Only enable mobile-specific features on mobile devices
+      if (isMobile) {
+        // Auto-zoom to 60-day window for immediate scrolling
+        autoZoomToScrollableRange();
 
-      // Add touch handlers for swipe gestures
-      addTouchHandlers();
+        // Add touch handlers for swipe gestures
+        addTouchHandlers();
+      }
+
+      chartYAxisMax.performanceChart =
+        performanceChart.options.scales &&
+        performanceChart.options.scales.y &&
+        typeof performanceChart.options.scales.y.max === 'number'
+          ? performanceChart.options.scales.y.max
+          : (performanceChart.scales && performanceChart.scales.y && typeof performanceChart.scales.y.max === 'number'
+              ? performanceChart.scales.y.max
+              : undefined);
     }
 
     function createEmptyDay() {
@@ -1641,6 +1899,7 @@
     <div><strong>Duration:</strong> ${activity.duration}</div>
     <div><strong>Distance:</strong> ${parseFloat(activity.distance).toFixed(2)} km</div>
     <div><strong>Height:</strong> ${parseFloat(activity.total_elevation_gain).toFixed(0)} m</div></div>
+    <div><strong>Performance:</strong> ${parseFloat(activity.performance).toFixed(0)}</div></div>
   `;
 
                 circle.appendChild(contentContainer);
@@ -1682,7 +1941,7 @@
       }
 
       // Fetch activities data
-      fetch(`/activities?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
+      const activitiesPromise = fetch(`/activities?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
         .then(response => response.json())
         .then(data => {
           if (data.error) {
@@ -1699,7 +1958,7 @@
         });
 
       // Fetch performance data with RunStroller included
-      fetch(`/performance?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
+      const performancePromise = fetch(`/performance?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
         .then(response => response.json())
         .then(data => {
           if (data.error) {
@@ -1707,12 +1966,37 @@
             return;
           }
 
+          // Compute max y value for "Individual Performance" dataset only if it exists (using all datasets as fallback)
+          let perfMax = 0;
+          if (data.activityPeriods) {
+            data.activityPeriods.forEach(period => {
+              const start = new Date(period.xMin);
+              const end = new Date(period.xMax);
+              const maxPerf = period.tooltipText.match(/Highest Performance: ([\d.]+)/)?.[1] || 0;
+              perfMax = Math.max(perfMax, maxPerf);
+            });
+          }
+          chartYAxisMax.performanceChart = Math.max(200, 1.1 * perfMax);
+          console.log('chartYAxisMax.performanceChart', chartYAxisMax.performanceChart);
+
           updatePerformanceChart(data);
         })
         .catch(error => {
           console.error('Error:', error);
           alert('Error fetching performance data');
         });
+
+      // Add x-axis scrolling for both charts after they're initialized
+      Promise.all([activitiesPromise, performancePromise]).then(() => {
+        setTimeout(() => {
+          if (performanceChart && performanceChart.chartArea) {
+            addXAxisScrolling('performanceChart', performanceChart, () => autoZoomToScrollableRange(performanceChart));
+          }
+          if (progressInstance && progressInstance.chartArea) {
+            addXAxisScrolling('progressChart', progressInstance, () => autoZoomToScrollableRange(progressInstance));
+          }
+        }, 200);
+      });
 
       // Fetch calendar data
       updateCalendar(fromDate, toDate);
@@ -1723,18 +2007,45 @@
     // ----------------------
 
 
-    function autoZoomToScrollableRange() {
-      if (performanceChart) {
-        const scales = performanceChart.scales.x;
-        const range = scales.max - scales.min;
-        const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+    function updateAdaptiveTimeScale(chart) {
+      if (!chart || !chart.scales?.x || chart.scales.x.type !== 'time') return;
+      
+      const scale = chart.scales.x;
+      const range = scale.max - scale.min;
+      const days = range / (24 * 60 * 60 * 1000);
+      
+      // Update time unit and step size based on visible range
+      if (days <= 10) {
+        chart.options.scales.x.time.unit = 'day';
+        chart.options.scales.x.time.stepSize = 1;
+      } else if (days <= 30) {
+        chart.options.scales.x.time.unit = 'day';
+        chart.options.scales.x.time.stepSize = 5;
+      } else if (days <= 90) {
+        chart.options.scales.x.time.unit = 'week';
+        chart.options.scales.x.time.stepSize = 1;
+      } else {
+        chart.options.scales.x.time.unit = 'month';
+        chart.options.scales.x.time.stepSize = 1;
+      }
+      
+      // Chart will be updated by the caller
+    }
 
-        if (range > maxRange) {
-          // Start showing the most recent 30 days
-          const endTime = scales.max;
-          const startTime = endTime - maxRange;
-          performanceChart.zoomScale('x', { min: startTime, max: endTime }, 'none');
-        }
+    function autoZoomToScrollableRange(chartInstance = null) {
+      // Default to performanceChart if no instance provided (for backward compatibility)
+      const chart = chartInstance || performanceChart;
+      if (!chart || !chart.scales?.x) return;
+      
+      const scales = chart.scales.x;
+      const range = scales.max - scales.min;
+      const maxRange = ZOOM_IN_DAY_RANGE * 24 * 60 * 60 * 1000; // ZOOM_IN_DAY_RANGE days in ms
+
+      if (range > maxRange) {
+        // Start showing the most recent 60 days
+        const endTime = scales.max;
+        const startTime = endTime - maxRange;
+        chart.zoomScale('x', { min: startTime, max: endTime }, 'none');
       }
     }
 
@@ -1819,9 +2130,9 @@
       let isDragging = false;
       let dragStartTime = 0;
       let hasMoved = false;
+      let touchStartX = 0;
+      let touchStartY = 0;
 
-      // Add specific x-axis scrolling
-      addXAxisScrolling();
 
       canvas.addEventListener('touchstart', (e) => {
         touchStartX = e.touches[0].clientX;
@@ -1884,13 +2195,21 @@
       });
     }
 
-    function addXAxisScrolling() {
-      const canvas = document.getElementById('performanceChart');
+    function addXAxisScrolling(canvasID, chartInstance, autoZoomCallback = null) {
+      const canvas = document.getElementById(canvasID);
+      if (!canvas || !chartInstance) return;
+      
+      // Prevent duplicate listeners
+      if (canvas._xAxisScrollingAdded) return;
+      canvas._xAxisScrollingAdded = true;
+      
       let isScrolling = false;
       let scrollStartX = 0;
       let scrollStartTime = 0;
 
       canvas.addEventListener('touchstart', (e) => {
+        if (!chartInstance.chartArea || !e.touches || e.touches.length === 0) return;
+        
         const rect = canvas.getBoundingClientRect();
         const y = e.touches[0].clientY - rect.top;
         const canvasHeight = rect.height;
@@ -1901,8 +2220,10 @@
           scrollStartX = e.touches[0].clientX;
           scrollStartTime = Date.now();
 
-          // Ensure we have a 30-day window for scrolling
-          autoZoomToScrollableRange();
+          // Call auto-zoom callback if provided (for performance chart)
+          if (autoZoomCallback) {
+            autoZoomCallback();
+          }
 
           e.preventDefault();
           e.stopPropagation();
@@ -1910,41 +2231,76 @@
       }, { passive: false });
 
       canvas.addEventListener('touchmove', (e) => {
-        if (!isScrolling) return;
+        if (!isScrolling || !chartInstance || !chartInstance.chartArea) return;
+        if (!e.touches || e.touches.length === 0) return;
 
         const currentX = e.touches[0].clientX;
         const deltaX = currentX - scrollStartX;
 
         // Convert pixel movement to time movement
-        const scales = performanceChart.scales.x;
-        const chartArea = performanceChart.chartArea;
+        const scales = chartInstance.scales?.x;
+        const chartArea = chartInstance.chartArea;
+        if (!scales || !chartArea) return;
+        
         const pixelRange = chartArea.right - chartArea.left;
         const timeRange = scales.max - scales.min;
+        
+        if (timeRange === 0 || pixelRange === 0 || !isFinite(timeRange) || !isFinite(pixelRange)) return;
+        
         const timePerPixel = timeRange / pixelRange;
 
         // Calculate time shift (negative because we want opposite direction)
         const timeShift = -deltaX * timePerPixel;
 
+        // Get current scale limits
+        const currentMin = scales.options.min !== undefined ? scales.options.min : scales.min;
+        const currentMax = scales.options.max !== undefined ? scales.options.max : scales.max;
+
         // Apply the pan
-        const newMin = scales.options.min + timeShift;
-        const newMax = scales.options.max + timeShift;
+        const newMin = currentMin + timeShift;
+        const newMax = currentMax + timeShift;
 
         // Get the original data bounds
-        const originalMin = Math.min(...performanceChart.data.datasets.flatMap(d =>
-          d.data.map(point => point.x.getTime())
-        ));
-        const originalMax = Math.max(...performanceChart.data.datasets.flatMap(d =>
-          d.data.map(point => point.x.getTime())
-        ));
+        const allDates = [];
+        chartInstance.data.datasets.forEach(dataset => {
+          if (dataset.data && Array.isArray(dataset.data)) {
+            dataset.data.forEach(point => {
+              if (point && point.x) {
+                const dateValue = point.x instanceof Date ? point.x.getTime() : new Date(point.x).getTime();
+                if (!isNaN(dateValue)) {
+                  allDates.push(dateValue);
+                }
+              }
+            });
+          }
+        });
 
-        // Constrain to data bounds
-        if (newMin >= originalMin && newMax <= originalMax) {
-          scales.options.min = newMin;
-          scales.options.max = newMax;
-          performanceChart.update('none');
+        if (allDates.length > 0) {
+          const originalMin = Math.min(...allDates);
+          const originalMax = Math.max(...allDates);
+
+          // Constrain to data bounds
+          if (newMin >= originalMin && newMax <= originalMax && newMin < newMax && isFinite(newMin) && isFinite(newMax)) {
+            if (!scales.options) {
+              scales.options = {};
+            }
+            scales.options.min = newMin;
+            scales.options.max = newMax;
+            try {
+              chartInstance.update('none');
+            } catch (err) {
+              console.error('Error updating chart:', err);
+            }
+          }
+        }
+        // Set y-axis min to 0 and max to stored value (only for performanceChart)
+        if (canvasID !== undefined && chartYAxisMax[canvasID] !== undefined && chartInstance.options && chartInstance.options.scales && chartInstance.options.scales.y) {
+          chartInstance.options.scales.y.min = 0;
+          chartInstance.options.scales.y.max = chartYAxisMax[canvasID];
         }
 
         scrollStartX = currentX;
+
         e.preventDefault();
         e.stopPropagation();
       }, { passive: false });
@@ -1958,11 +2314,57 @@
       }, { passive: false });
     }
 
+    function autoZoomProgressToFullWidth() {
+      if (progressInstance) {
+        // Get all date values from datasets
+        const allDates = [];
+        progressInstance.data.datasets.forEach(dataset => {
+          dataset.data.forEach(point => {
+            if (point.x) {
+              const dateValue = point.x instanceof Date ? point.x.getTime() : new Date(point.x).getTime();
+              allDates.push(dateValue);
+            }
+          });
+        });
+        
+        if (allDates.length > 0) {
+          const minDate = Math.min(...allDates);
+          const maxDate = Math.max(...allDates);
+          
+          // Zoom to show full date range using 100% of chart width
+          progressInstance.zoomScale('x', { min: minDate, max: maxDate }, 'none');
+        }
+      }
+    }
+
+
+    function resetProgressZoom() {
+      if (progressInstance) {
+        // Clear any manual scale settings
+        delete progressInstance.scales.x.options.min;
+        delete progressInstance.scales.x.options.max;
+
+        // Use Chart.js built-in reset
+        progressInstance.resetZoom();
+        
+        // Then zoom to full width
+        setTimeout(() => {
+          autoZoomProgressToFullWidth();
+        }, 50);
+      }
+    }
+
     // Event listeners
     document.getElementById('legendBtn').addEventListener('click', toggleLegend);
     document.getElementById('closeLegend').addEventListener('click', closeLegend);
     document.getElementById('legendOverlay').addEventListener('click', closeLegend);
     document.getElementById('resetZoomBtn').addEventListener('click', resetZoom);
+    
+    // Add progress chart reset zoom listener
+    const resetProgressZoomBtn = document.getElementById('resetProgressZoomBtn');
+    if (resetProgressZoomBtn) {
+      resetProgressZoomBtn.addEventListener('click', resetProgressZoom);
+    }
 
     // Make tooltip hint clickable
     document.getElementById('tooltipHint').addEventListener('click', function () {

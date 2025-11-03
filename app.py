@@ -229,24 +229,34 @@ def get_activities(access_token, after=None, before=None, activity_types=None):
 def calculate_performance_score(activity):
     """Calculate a performance score based on speed, distance, and duration."""
     # Base score is average speed * distance (rewards both speed and distance)
-    base_score = activity['average_speed'] * activity['distance']
-    
+    base_score = float(activity['average_speed']) * float(activity['distance']);
+
     # Add duration factor (longer activities get a small boost)
     duration_factor = 1 + (activity['moving_time'] / 4)  # 4 hours would double the score
-    
+
     # Activity type specific multipliers to normalize different activities
     type_multipliers = {
         'Run': 1.0,
+        'RunStroller': 1.1,
         'Ride': 0.05,  # Significantly reduced from 0.25 to account for easier gains
         'Swim': 4.0,   # Swimming is slower, so we increase the score
         'Walk': 2.0,   # Walking is slower
         'Hike': 1.5,   # Hiking is moderate
         'NordicSki': 0.8  # Nordic skiing is between running and biking
     }
-    
+
     multiplier = type_multipliers.get(activity['type'], 1.0)
-    
-    return base_score * duration_factor * multiplier
+
+    # Elevation factor using given formula, with a check to avoid divide by zero
+    x = float(activity['total_elevation_gain'])
+    if x > 0:
+        elevation_factor = 1 + 1 / (1 + (500 / x) ** 2)
+    else:
+        elevation_factor = 1  # No elevation gain, neutral effect
+
+    score = base_score * duration_factor * multiplier * elevation_factor
+
+    return score
 
 def identify_activity_periods(total_data):
     """Identify distinct activity periods based on significant shifts in performance."""
@@ -330,6 +340,9 @@ def get_calendar_data():
             for _, activity in group.iterrows():
                 hours = int(activity['moving_time'])
                 minutes = int((activity['moving_time'] - hours) * 60)
+                # Convert Series to dict for calculate_performance_score
+                activity_dict = activity.to_dict()
+                performance_score = calculate_performance_score(activity_dict)
                 day_activities.append({
                     'type': activity['type'],
                     'duration': f"{hours}h {minutes:02d}m",
@@ -337,7 +350,8 @@ def get_calendar_data():
                     'distance': activity['distance'] if (activity['type'] != 'WeightTraining' and activity['type'] != 'Workout') else 0,
                     'color': colors.get(activity['type'], '#999999'),
                     'total_elevation_gain': activity['total_elevation_gain'],
-                    'name': activity['name']
+                    'name': activity['name'],
+                    'performance': round(performance_score, 2)
                 })
             
             calendar_data.append({

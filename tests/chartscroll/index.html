@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mobile Chart Enhancements</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 400px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* Legend Styles */
+    .legend-container {
+      position: fixed;
+      top: 0;
+      left: -320px;
+      width: 300px;
+      height: 100vh;
+      background: white;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      transition: left 0.3s ease;
+      padding: 20px;
+      box-sizing: border-box;
+      overflow-y: auto;
+    }
+
+    .legend-container.open {
+      left: 0;
+    }
+
+    .legend-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .legend-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .legend-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .legend-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .close-legend {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .legend-item:hover {
+      background-color: #f8f9fa;
+    }
+
+    .legend-item.hidden {
+      opacity: 0.5;
+    }
+
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      margin-right: 12px;
+      border-radius: 3px;
+      border: 2px solid;
+    }
+
+    .legend-label {
+      font-size: 14px;
+      color: #333;
+      flex: 1;
+    }
+
+    /* Control Buttons - Redesigned */
+    .chart-header {
+      position: relative;
+      padding: 15px 20px;
+      background: white;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chart-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    .chart-controls {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .control-icon {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      transition: background-color 0.2s ease, transform 0.2s ease;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+    }
+
+    .control-icon:hover {
+      background-color: #f5f5f5;
+      transform: scale(1.1);
+    }
+
+    .control-icon:active {
+      transform: scale(0.95);
+    }
+
+    .legend-icon {
+      font-size: 18px;
+    }
+
+    .fullscreen-icon {
+      font-size: 18px;
+    }
+
+    /* Toast for tooltip close hint */
+    .tooltip-hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 18px;
+      border-radius: 25px;
+      font-size: 14px;
+      z-index: 1001;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .tooltip-hint:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+
+    .tooltip-hint.visible {
+      opacity: 1;
+    }
+
+    /* Mobile optimizations */
+    @media (max-width: 768px) {
+      .chart-container {
+        height: 300px;
+      }
+
+      .chart-header {
+        padding: 12px 15px;
+      }
+
+      .chart-title {
+        font-size: 16px;
+      }
+
+      .control-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+      }
+
+      .chart-controls {
+        gap: 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="chart-wrapper">
+    <div class="chart-header">
+      <h2 class="chart-title">Performance Over Time</h2>
+      <div class="chart-controls">
+        <button class="control-icon legend-icon" id="legendBtn" title="Show Legend">📊</button>
+        <button class="control-icon fullscreen-icon" id="resetZoomBtn" title="Reset Zoom">⛶</button>
+      </div>
+    </div>
+    <div class="chart-container">
+      <canvas id="performanceChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Legend Sidebar -->
+  <div class="legend-overlay" id="legendOverlay"></div>
+  <div class="legend-container" id="legendContainer">
+    <div class="legend-header">
+      <div class="legend-title">Chart Legend</div>
+      <button class="close-legend" id="closeLegend">×</button>
+    </div>
+    <div id="legendItems"></div>
+  </div>
+
+  <!-- Tooltip hint -->
+  <div class="tooltip-hint" id="tooltipHint">Tap me to close tooltip</div>
+
+  <script>
+    // No manual registration needed - plugins auto-register from CDN
+
+    let performanceChart = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isLegendOpen = false;
+    let tooltipVisible = false;
+
+    // Sample data (replace with your actual data) - 3+ months of data
+    const sampleData = {
+      datasets: [
+        {
+          label: 'Total Performance',
+          data: Array.from({ length: 120 }, (_, i) => {
+            // Create more realistic performance data with trends
+            const baseValue = 300;
+            const trend = Math.sin(i / 20) * 50; // Cyclical pattern
+            const noise = (Math.random() - 0.5) * 100;
+            return Math.max(100, baseValue + trend + noise);
+          }),
+          dates: Array.from({ length: 120 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (120 - i));
+            return date.toISOString();
+          }),
+          borderColor: '#000000',
+          backgroundColor: '#000000',
+          fill: false,
+          pointRadius: 2,
+          showLine: true
+        },
+        {
+          label: 'Total Performance Trend',
+          data: Array.from({ length: 120 }, (_, i) => {
+            // Smoother trend line
+            const baseValue = 280;
+            const trend = Math.sin(i / 30) * 40;
+            const noise = (Math.random() - 0.5) * 30;
+            return Math.max(100, baseValue + trend + noise);
+          }),
+          dates: Array.from({ length: 120 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (120 - i));
+            return date.toISOString();
+          }),
+          borderColor: '#00FF00',
+          backgroundColor: 'rgba(0, 255, 0, 0.1)',
+          fill: false,
+          pointRadius: 1,
+          showLine: true
+        },
+        {
+          label: 'Total 4-Week Average',
+          data: Array.from({ length: 120 }, (_, i) => {
+            // Moving average-like data
+            const baseValue = 250;
+            const trend = (i / 120) * 50; // Gradual improvement over time
+            const noise = (Math.random() - 0.5) * 20;
+            return Math.max(100, baseValue + trend + noise);
+          }),
+          dates: Array.from({ length: 120 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - (120 - i));
+            return date.toISOString();
+          }),
+          borderColor: '#808080',
+          backgroundColor: 'rgba(128, 128, 128, 0.1)',
+          fill: false,
+          pointRadius: 1,
+          showLine: true
+        },
+        {
+          label: 'Run Performance',
+          data: Array.from({ length: 60 }, (_, i) => {
+            // Scattered run data (not every day)
+            const baseValue = 350;
+            const noise = (Math.random() - 0.5) * 150;
+            return Math.max(150, baseValue + noise);
+          }),
+          dates: Array.from({ length: 60 }, (_, i) => {
+            // Random dates over the period
+            const date = new Date();
+            date.setDate(date.getDate() - Math.floor(Math.random() * 120));
+            return date.toISOString();
+          }),
+          borderColor: '#FF4500',
+          backgroundColor: '#FF4500',
+          fill: false,
+          pointRadius: 3,
+          showLine: false
+        },
+        {
+          label: 'Walk Performance',
+          data: Array.from({ length: 40 }, (_, i) => {
+            const baseValue = 180;
+            const noise = (Math.random() - 0.5) * 80;
+            return Math.max(50, baseValue + noise);
+          }),
+          dates: Array.from({ length: 40 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - Math.floor(Math.random() * 120));
+            return date.toISOString();
+          }),
+          borderColor: '#32CD32',
+          backgroundColor: '#32CD32',
+          fill: false,
+          pointRadius: 2,
+          showLine: false
+        },
+        {
+          label: 'Hike Performance',
+          data: Array.from({ length: 25 }, (_, i) => {
+            const baseValue = 220;
+            const noise = (Math.random() - 0.5) * 100;
+            return Math.max(100, baseValue + noise);
+          }),
+          dates: Array.from({ length: 25 }, (_, i) => {
+            const date = new Date();
+            date.setDate(date.getDate() - Math.floor(Math.random() * 120));
+            return date.toISOString();
+          }),
+          borderColor: '#8B4513',
+          backgroundColor: '#8B4513',
+          fill: false,
+          pointRadius: 3,
+          showLine: false
+        }
+      ]
+    };
+
+    function updatePerformanceChart(data) {
+      const ctx = document.getElementById('performanceChart').getContext('2d');
+
+      if (performanceChart) {
+        performanceChart.destroy();
+      }
+
+      // Transform the data to include dates
+      const transformedDatasets = data.datasets.map(dataset => ({
+        ...dataset,
+        data: dataset.data.map((value, index) => ({
+          x: new Date(dataset.dates[index]),
+          y: value
+        }))
+      }));
+
+      performanceChart = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: transformedDatasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            intersect: false,
+            mode: 'nearest',
+            axis: 'x'
+          },
+          plugins: {
+            title: {
+              display: false // Hide default title since we have custom header
+            },
+            tooltip: {
+              enabled: true,
+              callbacks: {
+                label: function (context) {
+                  return `${context.dataset.label}: ${context.parsed.y.toFixed(1)}`;
+                }
+              },
+              // Custom tooltip positioning and behavior
+              external: function (context) {
+                if (context.tooltip.opacity > 0) {
+                  tooltipVisible = true;
+                  showTooltipHint();
+                } else {
+                  tooltipVisible = false;
+                  hideTooltipHint();
+                }
+              }
+            },
+            legend: {
+              display: false
+            },
+            zoom: {
+              limits: {
+                x: { min: 'original', max: 'original' }
+              },
+              pan: {
+                enabled: true,
+                mode: 'x',
+                modifierKey: null,
+                threshold: 1,
+                onPanStart: function ({ chart }) {
+                  // Mark as panning and disable tooltip
+                  chart._isPanning = true;
+                  chart.options.plugins.tooltip.enabled = false;
+
+                  // Hide any existing tooltip
+                  chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                  chart.update('none');
+
+                  // Ensure chart is zoomed to show max 30 days if not already
+                  const scales = chart.scales.x;
+                  const range = scales.max - scales.min;
+                  const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+
+                  if (range > maxRange) {
+                    // Auto-zoom to 30 days centered on current view
+                    const center = (scales.max + scales.min) / 2;
+                    chart.zoomScale('x', { min: center - maxRange / 2, max: center + maxRange / 2 }, 'none');
+                  }
+                },
+                onPanComplete: function ({ chart }) {
+                  // Re-enable tooltip after pan with delay
+                  setTimeout(() => {
+                    chart._isPanning = false;
+                    chart.options.plugins.tooltip.enabled = true;
+                  }, 200);
+                }
+              },
+              zoom: {
+                wheel: {
+                  enabled: false
+                },
+                pinch: {
+                  enabled: true
+                },
+                mode: 'x',
+                onZoomComplete: function ({ chart }) {
+                  // Limit visible range to ~30 days worth
+                  const scales = chart.scales.x;
+                  const range = scales.max - scales.min;
+                  const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+
+                  if (range > maxRange) {
+                    const center = (scales.max + scales.min) / 2;
+                    chart.zoomScale('x', { min: center - maxRange / 2, max: center + maxRange / 2 }, 'none');
+                  }
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'day',
+                displayFormats: {
+                  day: 'MMM d'
+                }
+              },
+              title: {
+                display: true,
+                text: 'Date'
+              },
+              ticks: {
+                source: 'auto',
+                maxRotation: 45,
+                maxTicksLimit: 8
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Performance Score'
+              },
+              beginAtZero: true
+            }
+          },
+          elements: {
+            line: {
+              tension: 0.4
+            },
+            point: {
+              radius: 2,
+              hoverRadius: 4
+            }
+          },
+          animation: {
+            duration: 750
+          },
+          // Custom click handler for tooltip dismissal
+          onClick: function (event, elements) {
+            // Always try to hide tooltip on click
+            this.tooltip.setActiveElements([], { x: 0, y: 0 });
+            this.update('none');
+            tooltipVisible = false;
+            hideTooltipHint();
+          },
+          onHover: function (event, elements) {
+            // Only show tooltip if not currently panning
+            if (!this._isPanning && elements.length > 0) {
+              tooltipVisible = true;
+              showTooltipHint();
+            }
+          }
+        }
+      });
+
+      // Update custom legend
+      updateCustomLegend();
+
+      // Auto-zoom to 30-day window for immediate scrolling
+      autoZoomToScrollableRange();
+
+      // Add touch handlers for swipe gestures
+      addTouchHandlers();
+    }
+
+    function autoZoomToScrollableRange() {
+      if (performanceChart) {
+        const scales = performanceChart.scales.x;
+        const range = scales.max - scales.min;
+        const maxRange = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+
+        if (range > maxRange) {
+          // Start showing the most recent 30 days
+          const endTime = scales.max;
+          const startTime = endTime - maxRange;
+          performanceChart.zoomScale('x', { min: startTime, max: endTime }, 'none');
+        }
+      }
+    }
+
+    function updateCustomLegend() {
+      const legendItems = document.getElementById('legendItems');
+      legendItems.innerHTML = '';
+
+      performanceChart.data.datasets.forEach((dataset, index) => {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        if (!performanceChart.isDatasetVisible(index)) {
+          item.classList.add('hidden');
+        }
+
+        const color = document.createElement('div');
+        color.className = 'legend-color';
+        color.style.backgroundColor = dataset.borderColor || dataset.backgroundColor;
+        color.style.borderColor = dataset.borderColor || dataset.backgroundColor;
+
+        const label = document.createElement('div');
+        label.className = 'legend-label';
+        label.textContent = dataset.label;
+
+        item.appendChild(color);
+        item.appendChild(label);
+
+        item.addEventListener('click', () => {
+          performanceChart.setDatasetVisibility(index, !performanceChart.isDatasetVisible(index));
+          performanceChart.update();
+          updateCustomLegend();
+        });
+
+        legendItems.appendChild(item);
+      });
+    }
+
+    function toggleLegend() {
+      isLegendOpen = !isLegendOpen;
+      const container = document.getElementById('legendContainer');
+      const overlay = document.getElementById('legendOverlay');
+
+      container.classList.toggle('open', isLegendOpen);
+      overlay.classList.toggle('visible', isLegendOpen);
+    }
+
+    function closeLegend() {
+      isLegendOpen = false;
+      document.getElementById('legendContainer').classList.remove('open');
+      document.getElementById('legendOverlay').classList.remove('visible');
+    }
+
+    function resetZoom() {
+      if (performanceChart) {
+        // Clear tooltip first
+        performanceChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+        tooltipVisible = false;
+        hideTooltipHint();
+
+        // Clear any manual scale settings
+        delete performanceChart.scales.x.options.min;
+        delete performanceChart.scales.x.options.max;
+
+        // Use Chart.js built-in reset
+        performanceChart.resetZoom();
+      }
+    }
+
+    function showTooltipHint() {
+      const hint = document.getElementById('tooltipHint');
+      hint.classList.add('visible');
+      setTimeout(() => {
+        hint.classList.remove('visible');
+      }, 2000);
+    }
+
+    function hideTooltipHint() {
+      document.getElementById('tooltipHint').classList.remove('visible');
+    }
+
+    function addTouchHandlers() {
+      const canvas = document.getElementById('performanceChart');
+      let isDragging = false;
+      let dragStartTime = 0;
+      let hasMoved = false;
+
+      // Add specific x-axis scrolling
+      addXAxisScrolling();
+
+      canvas.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isDragging = false;
+        hasMoved = false;
+        dragStartTime = Date.now();
+
+        // Prevent default to avoid interference
+        e.preventDefault();
+      });
+
+      canvas.addEventListener('touchmove', (e) => {
+        const touchCurrentX = e.touches[0].clientX;
+        const touchCurrentY = e.touches[0].clientY;
+
+        const deltaX = Math.abs(touchCurrentX - touchStartX);
+        const deltaY = Math.abs(touchCurrentY - touchStartY);
+
+        hasMoved = true;
+
+        // If any movement, disable tooltip
+        if (deltaX > 3 || deltaY > 3) {
+          isDragging = true;
+          performanceChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+          performanceChart.update('none');
+        }
+
+        // Let Chart.js handle the actual panning
+        e.preventDefault();
+      });
+
+      canvas.addEventListener('touchend', (e) => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        const touchDuration = Date.now() - dragStartTime;
+
+        // If it was a quick tap without much movement, allow tooltip
+        if (!hasMoved && touchDuration < 200) {
+          // This was a tap - let Chart.js handle it normally
+        } else if (!isDragging && touchDuration < 300) {
+          // Check for legend swipe
+          if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 30) {
+            if (deltaX > 0 && touchStartX < 50) {
+              toggleLegend();
+            }
+          }
+        }
+
+        // Reset states
+        setTimeout(() => {
+          isDragging = false;
+          hasMoved = false;
+        }, 100);
+
+        e.preventDefault();
+      });
+    }
+
+    function addXAxisScrolling() {
+      const canvas = document.getElementById('performanceChart');
+      let isScrolling = false;
+      let scrollStartX = 0;
+      let scrollStartTime = 0;
+
+      canvas.addEventListener('touchstart', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const y = e.touches[0].clientY - rect.top;
+        const canvasHeight = rect.height;
+
+        // Check if touch is in the bottom 80px (approximate x-axis area)
+        if (y > canvasHeight - 80) {
+          isScrolling = true;
+          scrollStartX = e.touches[0].clientX;
+          scrollStartTime = Date.now();
+
+          // Ensure we have a 30-day window for scrolling
+          autoZoomToScrollableRange();
+
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (!isScrolling) return;
+
+        const currentX = e.touches[0].clientX;
+        const deltaX = currentX - scrollStartX;
+
+        // Convert pixel movement to time movement
+        const scales = performanceChart.scales.x;
+        const chartArea = performanceChart.chartArea;
+        const pixelRange = chartArea.right - chartArea.left;
+        const timeRange = scales.max - scales.min;
+        const timePerPixel = timeRange / pixelRange;
+
+        // Calculate time shift (negative because we want opposite direction)
+        const timeShift = -deltaX * timePerPixel;
+
+        // Apply the pan
+        const newMin = scales.options.min + timeShift;
+        const newMax = scales.options.max + timeShift;
+
+        // Get the original data bounds
+        const originalMin = Math.min(...performanceChart.data.datasets.flatMap(d =>
+          d.data.map(point => point.x.getTime())
+        ));
+        const originalMax = Math.max(...performanceChart.data.datasets.flatMap(d =>
+          d.data.map(point => point.x.getTime())
+        ));
+
+        // Constrain to data bounds
+        if (newMin >= originalMin && newMax <= originalMax) {
+          scales.options.min = newMin;
+          scales.options.max = newMax;
+          performanceChart.update('none');
+        }
+
+        scrollStartX = currentX;
+        e.preventDefault();
+        e.stopPropagation();
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', (e) => {
+        if (isScrolling) {
+          isScrolling = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, { passive: false });
+    }
+
+    // Event listeners
+    document.getElementById('legendBtn').addEventListener('click', toggleLegend);
+    document.getElementById('closeLegend').addEventListener('click', closeLegend);
+    document.getElementById('legendOverlay').addEventListener('click', closeLegend);
+    document.getElementById('resetZoomBtn').addEventListener('click', resetZoom);
+
+    // Make tooltip hint clickable
+    document.getElementById('tooltipHint').addEventListener('click', function () {
+      if (performanceChart) {
+        performanceChart.tooltip.setActiveElements([], { x: 0, y: 0 });
+        performanceChart.update('none');
+        tooltipVisible = false;
+        hideTooltipHint();
+      }
+    });
+
+    // Initialize chart
+    updatePerformanceChart(sampleData);
+  </script>
+</body>
+
+</html>

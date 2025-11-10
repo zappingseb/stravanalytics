@@ -1093,7 +1093,32 @@
 
       // Add progress line chart
       const progressCtx = document.getElementById('progressChart').getContext('2d');
-
+      
+      // Ensure container has proper width before Chart.js initializes
+      const progressChartContainer = progressCtx.canvas.parentElement;
+      const progressChartWrapper = progressCtx.canvas.closest('.chart-wrapper');
+      
+      // Force container to have a proper width before chart creation
+      if (progressChartContainer) {
+        // Always ensure container has width set
+        if (!progressChartContainer.style.width) {
+          progressChartContainer.style.width = '100%';
+        }
+        // Ensure minimum width
+        if (!progressChartContainer.style.minWidth) {
+          progressChartContainer.style.minWidth = '70vw';
+        }
+      }
+      
+      if (progressChartWrapper && !progressChartWrapper.style.width && !isMobile) {
+        // On desktop, ensure wrapper has proper width (not 100% which would break the flex layout)
+        progressChartWrapper.style.width = '';
+      }
+      
+      // Ensure canvas itself has no inline width/height that could interfere
+      progressCtx.canvas.style.width = '';
+      progressCtx.canvas.style.height = '';
+      
       // Calculate cumulative progress
       let cumulativeDistance = 0;
       const progressData = data.dates.map((date, index) => {
@@ -1138,25 +1163,25 @@
         { x: yearEnd, y: projectedTotal }
       );
 
-      // Display projected total in top right corner
-      const chartContainer = progressCtx.canvas.parentElement;
-      let projectionDisplay = chartContainer.querySelector('.projection-display');
+      // Display projected total in goalOverall container
+      const goalOverall = document.getElementById('goalOverall');
+      let projectionDisplay = goalOverall.querySelector('.projection-display');
       if (!projectionDisplay) {
         projectionDisplay = document.createElement('div');
         projectionDisplay.className = 'projection-display';
         projectionDisplay.style.cssText = `
-      position: absolute;
-      top: 10px;
-      right: 10px;
+      position: relative;
       background: rgba(252, 76, 2, 0.9);
       color: white;
       padding: 8px 12px;
       border-radius: 4px;
       font-weight: bold;
       z-index: 1000;
+      max-width: 149px;
+      text-align: center;
+      margin: 10px auto;
     `;
-        chartContainer.style.position = 'relative';
-        chartContainer.appendChild(projectionDisplay);
+        goalOverall.insertBefore(projectionDisplay, goalOverall.children[1]);
       }
       projectionDisplay.textContent = `Projected: ${Math.round(projectedTotal)} km`;
 
@@ -1219,6 +1244,12 @@
   `;
       }
 
+      // Ensure container has width before creating chart - force layout
+      if (progressChartContainer) {
+        progressChartContainer.style.display = 'block';
+        progressChartContainer.offsetHeight; // Force reflow
+      }
+      
       progressInstance = new Chart(progressCtx, {
         type: 'line',
         data: {
@@ -1260,7 +1291,7 @@
               label: 'Goal Line',
               data: [
                 { x: intersectionPoint.x, y: data.yearlyGoal },
-                { x: 0, y: data.yearlyGoal }
+                { x: yearEndGoal, y: data.yearlyGoal }
               ],
               borderColor: 'rgba(255, 140, 0, 0.6)',  // Orange
               borderWidth: 2,
@@ -1310,7 +1341,7 @@
                   
                   const date = new Date(value);
                   
-                  // Show every tick for very small ranges
+                  // Show every tick for very small rangess
                   if (days <= 10) {
                     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   }
@@ -1357,6 +1388,7 @@
               }
             },
             zoom: {
+              enabled: isMobile,
               limits: {
                 x: { min: 'original', max: 'original' }
               },
@@ -1407,7 +1439,8 @@
                   enabled: isMobile
                 },
                 mode: 'x',
-                onZoomComplete: function ({ chart }) {
+                // Only limit zoom range on mobile where zoom is actually enabled
+                onZoomComplete: isMobile ? function ({ chart }) {
                   // Limit visible range to ~60 days worth
                   const scales = chart.scales.x;
                   const range = scales.max - scales.min;
@@ -1421,12 +1454,29 @@
                   // Update time scale adaptively based on visible range
                   updateAdaptiveTimeScale(chart);
                   chart.update('none');
-                }
+                } : undefined
               }
             }
           }
         }
       });
+      
+      // Immediately resize chart to ensure proper dimensions
+      if (progressInstance) {
+        setTimeout(() => {
+          if (progressInstance && progressChartContainer) {
+            const containerWidth = progressChartContainer.getBoundingClientRect().width;
+            if (containerWidth > 0) {
+              progressInstance.resize();
+            } else {
+              // Container still has no width, force it and resize
+              progressChartContainer.style.width = '100%';
+              progressChartContainer.style.minWidth = '70vw';
+              progressInstance.resize();
+            }
+          }
+        }, 0);
+      }
 
       // Store y-axis maximum value for later use
       chartYAxisMax.progressChart =
@@ -1437,6 +1487,53 @@
           : (progressInstance.scales && progressInstance.scales.y && typeof progressInstance.scales.y.max === 'number'
               ? progressInstance.scales.y.max
               : undefined);
+      
+      // On desktop, explicitly set x-axis to show full data range and ensure proper sizing
+      if (!isMobile) {
+        setTimeout(() => {
+          if (progressInstance) {
+            // First, ensure chart has proper dimensions
+            if (progressInstance.chartArea) {
+              const container = progressCtx.canvas.parentElement;
+              const containerWidth = container.getBoundingClientRect().width;
+              if (containerWidth > 0 && progressCtx.canvas.width === 0) {
+                // Force resize if canvas has no width
+                progressInstance.resize();
+              }
+            }
+            
+            if (progressInstance.chartArea) {
+              // Get all date values from datasets
+              const allDates = [];
+              progressInstance.data.datasets.forEach(dataset => {
+                if (dataset.data && Array.isArray(dataset.data)) {
+                  dataset.data.forEach(point => {
+                    if (point && point.x) {
+                      const dateValue = point.x instanceof Date ? point.x.getTime() : new Date(point.x).getTime();
+                      if (!isNaN(dateValue)) {
+                        allDates.push(dateValue);
+                      }
+                    }
+                  });
+                }
+              });
+              
+              if (allDates.length > 0) {
+                const minDate = Math.min(...allDates);
+                const maxDate = Math.max(...allDates);
+                
+                // Set x-axis limits to show full data range
+                if (progressInstance.scales && progressInstance.scales.x) {
+                  progressInstance.scales.x.options.min = minDate;
+                  progressInstance.scales.x.options.max = maxDate;
+                  progressInstance.update('none');
+                }
+              }
+            }
+          }
+        }, 100);
+      }
+      
       // Show header and enable zoom on mobile
       if (isMobile) {
         document.getElementById('progressChartHeader').style.display = "block";
@@ -1929,7 +2026,16 @@
     }
 
 
+    let isFetchingData = false; // Guard to prevent concurrent fetches
+    
     function fetchData() {
+      // Prevent concurrent fetches
+      if (isFetchingData) {
+        console.log('fetchData already in progress, skipping...');
+        return;
+      }
+      
+      isFetchingData = true;
       const fromDate = document.getElementById('fromDate').value;
       const toDate = document.getElementById('toDate').value;
       const selectedTypes = $('#activityTypes').val();
@@ -1985,18 +2091,26 @@
           console.error('Error:', error);
           alert('Error fetching performance data');
         });
-
-      // Add x-axis scrolling for both charts after they're initialized
-      Promise.all([activitiesPromise, performancePromise]).then(() => {
-        setTimeout(() => {
-          if (performanceChart && performanceChart.chartArea) {
-            addXAxisScrolling('performanceChart', performanceChart, () => autoZoomToScrollableRange(performanceChart));
-          }
-          if (progressInstance && progressInstance.chartArea) {
-            addXAxisScrolling('progressChart', progressInstance, () => autoZoomToScrollableRange(progressInstance));
-          }
-        }, 200);
+      
+      // Reset flag when both promises complete (or fail)
+      Promise.allSettled([activitiesPromise, performancePromise]).then(() => {
+        isFetchingData = false;
       });
+
+      // Add x-axis scrolling for both charts after they're initialized (mobile only)
+      const isMobile = window.innerWidth <= 500 || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      if (isMobile) {
+        Promise.all([activitiesPromise, performancePromise]).then(() => {
+          setTimeout(() => {
+            if (performanceChart && performanceChart.chartArea) {
+              addXAxisScrolling('performanceChart', performanceChart, () => autoZoomToScrollableRange(performanceChart));
+            }
+            if (progressInstance && progressInstance.chartArea) {
+              addXAxisScrolling('progressChart', progressInstance, () => autoZoomToScrollableRange(progressInstance));
+            }
+          }, 200);
+        });
+      }
 
       // Fetch calendar data
       updateCalendar(fromDate, toDate);

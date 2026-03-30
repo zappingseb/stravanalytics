@@ -1,10 +1,11 @@
 FROM debian:bullseye
 WORKDIR /app
 
-# Install Python packages from apt
-RUN  apt-get update && apt-get install -y python3.10 python3-pip python3-yaml python3-numpy && rm -rf /var/lib/apt/lists/*
-RUN  apt-get update && apt-get install -y python3-pandas python3-requests \
-  && rm -rf /var/lib/apt/lists/*
+# Avoid apt numpy/pandas: they target NumPy 1.x and clash with pip’s NumPy 2.x.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -1,6 +1,7 @@
 flask==3.0.0
-requests==2.31.0
+requests>=2.31.0
+# NumPy 2.2+ has no wheels for Python 3.9 (Debian bullseye default python3 / pip3)
+numpy>=2.0,<2.2
 pandas>=2.2.3
-python-dotenv==1.0.0
-numpy==2.2.0
-scipy==1.16.2
+python-dotenv>=1.0.0
+scipy

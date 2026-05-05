@@ -467,6 +467,8 @@ def get_activities_data():
         
         # Ensure date column is in datetime format
         df['date'] = pd.to_datetime(df['date'])
+        # Reuse the existing scoring model for activity-goal points
+        df['performance_score'] = df.apply(calculate_performance_score, axis=1)
 
         # Group by date and type
         daily_distance = df.groupby(['date', 'type'])['distance'].sum().reset_index()
@@ -476,6 +478,7 @@ def get_activities_data():
         
         # Pivot table to align data properly
         pivot_df = daily_distance.pivot_table(index='date', columns='type', values='distance', fill_value=0)
+        daily_activity_points = df.groupby('date')['performance_score'].sum().reindex(pivot_df.index, fill_value=0)
 
         datasets = []
 
@@ -490,13 +493,20 @@ def get_activities_data():
         yearly_total = df['distance'].sum()
         yearly_goal = float(os.getenv('YEARLY_GOAL', 1000))
         progress_percentage = (yearly_total / yearly_goal) * 100
+        yearly_activity_total = df['performance_score'].sum()
+        yearly_activity_goal = float(os.getenv('YEARLY_ACTIVITY_GOAL', 25000))
+        activity_progress_percentage = (yearly_activity_total / yearly_activity_goal) * 100 if yearly_activity_goal > 0 else 0
 
         data = {
             'dates': all_dates,
             'datasets': datasets,
             'yearlyTotal': round(yearly_total, 2),
             'yearlyGoal': yearly_goal,
-            'progressPercentage': round(progress_percentage, 1)
+            'progressPercentage': round(progress_percentage, 1),
+            'dailyActivityPoints': daily_activity_points.round(2).tolist(),
+            'yearlyActivityTotal': round(yearly_activity_total, 2),
+            'yearlyActivityGoal': yearly_activity_goal,
+            'activityProgressPercentage': round(activity_progress_percentage, 1)
         }
 
         return jsonify(data)

@@ -11,6 +11,7 @@ A web application for analyzing and visualizing Strava activity data. This tool 
 - Performance period detection
 - Calendar view of activities
 - Progress tracking towards goals
+- Optional yearly activity-points goal chart (hidden by default)
 - Custom performance scoring system
 
 ## Setup
@@ -35,6 +36,8 @@ STRAVA_CLIENT_ID=your_client_id
 STRAVA_CLIENT_SECRET=your_client_secret
 STRAVA_REFRESH_TOKEN=your_refresh_token
 FLASK_SECRET_KEY=your_secret_key
+YEARLY_GOAL=1000
+YEARLY_ACTIVITY_GOAL=25000
 ```
 
 4. Run the application:

@@ -237,6 +237,37 @@
       max-width: 70%;
     }
 
+    .activity-goal-toggle {
+      margin: 12px 0;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .activity-goal-toggle label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #444;
+      cursor: pointer;
+    }
+
+    .activity-goal-chart-section {
+      display: none;
+      margin-top: 8px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .activity-projection-display {
+      margin: 10px auto;
+      max-width: 180px;
+      text-align: center;
+      background: rgba(46, 134, 222, 0.92);
+    }
+
     .goal-calculations {
       display: flex;
       justify-content: space-between;
@@ -410,6 +441,10 @@
       .progress-charts canvas.progress {
         max-width: 100% !important;
         width: 100% !important;
+      }
+
+      .activity-goal-toggle {
+        justify-content: flex-start;
       }
 
       /* tests/chartscroll input */
@@ -713,9 +748,35 @@
       </div>
     </div>
     <div id="goalOverall">
-
       <div id="yearlyProgress" style="max-width: 70%"></div>
       <canvas class="donut" id="goalDonut"></canvas>
+    </div>
+  </div>
+
+  <div class="activity-goal-toggle">
+    <label for="showActivityGoalChart">
+      <input type="checkbox" id="showActivityGoalChart">
+      Show yearly activity goal chart
+    </label>
+  </div>
+
+  <div class="activity-goal-chart-section" id="activityGoalChartSection">
+    <div class="progress-charts">
+      <div class="chart-wrapper">
+        <div class="chart-header" id="activityProgressChartHeader" style="display: none;">
+          <h2 class="chart-title">Activity Points Over Time</h2>
+          <div class="chart-controls">
+            <button class="control-icon fullscreen-icon" id="resetActivityProgressZoomBtn" title="Reset Zoom">⛶</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas class="progress" id="activityGoalChart"></canvas>
+        </div>
+      </div>
+      <div id="activityGoalOverall">
+        <div id="yearlyActivityProgress" style="max-width: 70%"></div>
+        <canvas class="donut" id="activityGoalDonut"></canvas>
+      </div>
     </div>
   </div>
 
@@ -851,6 +912,9 @@
     let performanceChart = null;
     let progressInstance = null;
     let donutInstance = null;
+    let activityGoalInstance = null;
+    let activityGoalDonutInstance = null;
+    let latestActivitiesData = null;
     let isLegendOpen = false;
     let tooltipVisible = false;
     const ZOOM_IN_DAY_RANGE = 60;
@@ -868,6 +932,14 @@
       if (donutInstance !== null) {
         donutInstance.destroy();
         donutInstance = null;
+      }
+      if (activityGoalInstance !== null) {
+        activityGoalInstance.destroy();
+        activityGoalInstance = null;
+      }
+      if (activityGoalDonutInstance !== null) {
+        activityGoalDonutInstance.destroy();
+        activityGoalDonutInstance = null;
       }
       if (performanceChart !== null) {
         performanceChart.destroy();
@@ -1057,6 +1129,219 @@
         kmDifference: Math.round(kmDifference * 10) / 10,
         selectedEndDate: selectedEndDate.toLocaleDateString('en-GB')
       };
+    }
+
+    function setActivityGoalChartVisibility() {
+      const toggle = document.getElementById('showActivityGoalChart');
+      const section = document.getElementById('activityGoalChartSection');
+      if (!toggle || !section) return false;
+
+      const shouldShow = !!toggle.checked;
+      section.style.display = shouldShow ? 'block' : 'none';
+      return shouldShow;
+    }
+
+    function updateActivityGoalChart(data) {
+      // Check if device is mobile/touch
+      const isMobile = window.innerWidth <= 500 || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      const shouldShow = setActivityGoalChartVisibility();
+      if (!shouldShow) {
+        if (activityGoalInstance) {
+          activityGoalInstance.destroy();
+          activityGoalInstance = null;
+        }
+        if (activityGoalDonutInstance) {
+          activityGoalDonutInstance.destroy();
+          activityGoalDonutInstance = null;
+        }
+        return;
+      }
+
+      if (!data || !Array.isArray(data.dates) || data.dates.length === 0) {
+        return;
+      }
+
+      const activityGoal = Number(data.yearlyActivityGoal) || 25000;
+      const activityTotal = Number(data.yearlyActivityTotal) || 0;
+      const activityProgress = activityGoal > 0
+        ? ((activityTotal / activityGoal) * 100)
+        : 0;
+      // Update progress text
+      document.getElementById('yearlyActivityProgress').innerHTML =
+        `${Math.round(activityTotal)}pts / ${Math.round(activityGoal)}pts<br>${activityProgress.toFixed(1)}%`;
+      const cappedProgress = Math.max(0, Math.min(100, activityProgress));
+      const activityDonutCtx = document.getElementById('activityGoalDonut').getContext('2d');
+      if (activityGoalDonutInstance) {
+        activityGoalDonutInstance.destroy();
+      }
+      activityGoalDonutInstance = new Chart(activityDonutCtx, {
+        type: 'doughnut',
+        data: {
+          datasets: [{
+            data: [cappedProgress, 100 - cappedProgress],
+            backgroundColor: ['#2e86de', '#f0f0f0'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          cutout: '80%',
+          responsive: true,
+          plugins: {
+            tooltip: { enabled: false }
+          }
+        }
+      });
+
+      const dailyPoints = Array.isArray(data.dailyActivityPoints) && data.dailyActivityPoints.length === data.dates.length
+        ? data.dailyActivityPoints
+        : data.dates.map(() => 0);
+
+      let cumulativePoints = 0;
+      const pointsProgressData = data.dates.map((date, index) => {
+        cumulativePoints += Number(dailyPoints[index] || 0);
+        return {
+          x: new Date(date),
+          y: cumulativePoints
+        };
+      });
+
+      if (pointsProgressData.length === 0) {
+        return;
+      }
+
+      let sumXY = 0;
+      let sumX2 = 0;
+      const firstDate = pointsProgressData[0].x;
+      pointsProgressData.forEach(point => {
+        const daysSinceStart = (point.x - firstDate) / (1000 * 60 * 60 * 24);
+        sumXY += daysSinceStart * point.y;
+        sumX2 += daysSinceStart * daysSinceStart;
+      });
+      const slope = sumX2 > 0 ? (sumXY / sumX2) : 0;
+
+      const yearEnd = new Date(firstDate);
+      yearEnd.setFullYear(firstDate.getFullYear() + 1, 0, 0);
+      const daysSinceStartForEnd = (yearEnd - firstDate) / (1000 * 60 * 60 * 24);
+      const projectedTotal = slope * daysSinceStartForEnd;
+      const activityGoalOverall = document.getElementById('activityGoalOverall');
+      let projectionDisplay = activityGoalOverall.querySelector('.activity-projection-display');
+      if (!projectionDisplay) {
+        projectionDisplay = document.createElement('div');
+        projectionDisplay.className = 'projection-display activity-projection-display';
+        projectionDisplay.style.cssText = `
+      position: relative;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-weight: bold;
+      z-index: 1000;
+      text-align: center;
+    `;
+        activityGoalOverall.insertBefore(projectionDisplay, activityGoalOverall.children[1]);
+      }
+      projectionDisplay.textContent = `Projected: ${Math.round(projectedTotal)} pts`;
+
+      const yearStart = new Date(firstDate.getFullYear(), 0, 1);
+      const yearEndGoal = new Date(yearStart);
+      yearEndGoal.setFullYear(yearStart.getFullYear() + 1);
+
+      const maxActual = pointsProgressData.reduce((maxValue, point) => Math.max(maxValue, point.y), 0);
+      const yAxisMax = Math.max(activityGoal, projectedTotal, maxActual) * 1.1;
+
+      const progressCtx = document.getElementById('activityGoalChart').getContext('2d');
+      const progressChartContainer = progressCtx.canvas.parentElement;
+      const progressChartWrapper = progressCtx.canvas.closest('.chart-wrapper');
+      if (progressChartContainer) {
+        if (!progressChartContainer.style.width) {
+          progressChartContainer.style.width = '100%';
+        }
+        if (!progressChartContainer.style.minWidth) {
+          progressChartContainer.style.minWidth = '70vw';
+        }
+      }
+      if (progressChartWrapper && !progressChartWrapper.style.width && !isMobile) {
+        progressChartWrapper.style.width = '';
+      }
+      progressCtx.canvas.style.width = '';
+      progressCtx.canvas.style.height = '';
+
+      const ctx = progressCtx;
+      if (activityGoalInstance) {
+        activityGoalInstance.destroy();
+      }
+      activityGoalInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: 'Goal Pace (Points)',
+              data: [
+                { x: yearStart, y: 0 },
+                { x: yearEndGoal, y: activityGoal }
+              ],
+              borderColor: 'rgba(200, 200, 200, 0.6)',
+              borderDash: [5, 5],
+              pointRadius: 0
+            },
+            {
+              label: 'Activity Points Progress',
+              data: pointsProgressData,
+              borderColor: '#2e86de',
+              backgroundColor: 'rgba(46, 134, 222, 0.12)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.1
+            },
+            {
+              label: 'Points Trend',
+              data: [
+                { x: firstDate, y: 0 },
+                { x: yearEnd, y: projectedTotal }
+              ],
+              borderColor: '#1f5ea8',
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          aspectRatio: 3,
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'month'
+              },
+              grid: {
+                display: false
+              }
+            },
+            y: {
+              beginAtZero: true,
+              max: yAxisMax,
+              title: {
+                display: true,
+                text: 'Activity Points'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  return `${Math.round(context.parsed.y)} pts`;
+                }
+              }
+            }
+          }
+        }
+      });
     }
 
     function updateProgressCharts(data) {
@@ -1559,6 +1844,8 @@
           }
         }, 100);
       }
+
+      updateActivityGoalChart(data);
     }
 
     function updatePerformanceChart(data) {
@@ -2055,6 +2342,7 @@
             return;
           }
 
+          latestActivitiesData = data;
           updateChart(data);
           updateProgressCharts(data);
         })
@@ -2478,6 +2766,17 @@
     const resetProgressZoomBtn = document.getElementById('resetProgressZoomBtn');
     if (resetProgressZoomBtn) {
       resetProgressZoomBtn.addEventListener('click', resetProgressZoom);
+    }
+    const showActivityGoalChart = document.getElementById('showActivityGoalChart');
+    if (showActivityGoalChart) {
+      showActivityGoalChart.addEventListener('change', () => {
+        if (latestActivitiesData) {
+          updateActivityGoalChart(latestActivitiesData);
+        } else {
+          setActivityGoalChartVisibility();
+        }
+      });
+      setActivityGoalChartVisibility();
     }
 
     // Make tooltip hint clickable

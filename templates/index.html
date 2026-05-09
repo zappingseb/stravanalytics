@@ -15,46 +15,244 @@
   <meta name="viewport" content="width=device-width">
 
   <style>
+    :root {
+      --radius-sm: 0.5rem;
+      --radius-md: 0.75rem;
+      --radius-lg: 1rem;
+      --radius-full: 9999px;
+      --color-border: #e5e7eb;
+      --color-border-strong: #d1d5db;
+      --color-muted: #6b7280;
+      --color-fg: #111827;
+      --color-surface: #ffffff;
+      --color-surface-muted: #f9fafb;
+      --color-accent: #ea580c;
+      --color-accent-hover: #c2410c;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+      --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06);
+      --ring-accent: 0 0 0 3px rgba(234, 88, 12, 0.22);
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
       display: flex;
       flex-direction: column;
       gap: 34px;
+      color: var(--color-fg);
+      background: #f3f4f6;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--color-fg);
+      margin: 0;
     }
 
     .date-inputs {
-      margin: 20px 0;
+      margin: 0;
       display: flex;
-      gap: 20px;
+      flex-wrap: wrap;
+      gap: 1rem 1.25rem;
+      align-items: flex-end;
+      position: relative;
+      z-index: 1;
+      padding: 1.25rem 1.5rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .date-inputs .date-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 9.5rem;
+    }
+
+    .date-inputs .date-field label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--color-muted);
+    }
+
+    .date-inputs input[type="text"] {
+      padding: 0.55rem 0.85rem;
+      font-size: 0.875rem;
+      line-height: 1.25;
+      color: var(--color-fg);
+      background: var(--color-surface-muted);
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-md);
+      box-shadow: inset 0 1px 1px rgba(15, 23, 42, 0.04);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      min-height: 2.75rem;
+      box-sizing: border-box;
+    }
+
+    .date-inputs input[type="text"]:hover {
+      border-color: #9ca3af;
+    }
+
+    .date-inputs input[type="text"]:focus {
+      outline: none;
+      background: var(--color-surface);
+      border-color: var(--color-accent);
+      box-shadow: var(--ring-accent);
+    }
+
+    .btn-fetch {
+      display: inline-flex;
       align-items: center;
-    }
-
-    input {
-      padding: 8px;
-    }
-
-    button {
-      padding: 8px 16px;
-      background-color: #FC4C02;
-      color: white;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.35rem;
+      min-height: 2.75rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: #fff;
+      background: #FC4C02;
       border: none;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      height: 38px;
+      box-shadow: var(--shadow-md);
+      transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease;
+      align-self: flex-end;
     }
 
-    button:hover {
-      background-color: #D94402;
+    .btn-fetch:hover {
+      background: #D94402;
+      box-shadow: 0 4px 10px -2px rgba(252, 76, 2, 0.35);
+    }
+
+    .btn-fetch:active {
+      transform: translateY(1px);
+    }
+
+    /* Date picker + activity selects above chart overlays */
+    .flatpickr-calendar {
+      z-index: 10060 !important;
+      border-radius: var(--radius-md) !important;
+      box-shadow: var(--shadow-md) !important;
+      border: 1px solid var(--color-border) !important;
+    }
+
+    .select2-container--open .select2-dropdown {
+      z-index: 10060 !important;
+      border-radius: var(--radius-md) !important;
+      border: 1px solid var(--color-border) !important;
+      box-shadow: var(--shadow-md) !important;
+      overflow: hidden;
     }
 
     .select2-container {
-      margin-right: 10px;
+      min-width: 200px;
+      max-width: 280px;
     }
 
-    .select2-selection--multiple {
-      min-height: 38px !important;
+    .select2-container--default .select2-selection--multiple {
+      min-height: 2.75rem !important;
+      padding: 0.35rem 0.5rem !important;
+      background: var(--color-surface-muted) !important;
+      border: 1px solid var(--color-border-strong) !important;
+      border-radius: var(--radius-md) !important;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+    }
+
+    .select2-container--default.select2-container--focus .select2-selection--multiple {
+      background: var(--color-surface) !important;
+      border-color: var(--color-accent) !important;
+      box-shadow: var(--ring-accent) !important;
+    }
+
+    .select2-container--default .select2-selection--multiple .select2-selection__choice {
+      display: inline-flex !important;
+      flex-direction: row-reverse !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+      margin: 0.15rem 0.35rem 0.15rem 0 !important;
+      padding: 0.2rem 0.45rem 0.2rem 0.55rem !important;
+      font-size: 0.8125rem !important;
+      font-weight: 500 !important;
+      color: #fff !important;
+      background: #FC4C02 !important;
+      border: none !important;
+      border-radius: var(--radius-full) !important;
+      line-height: 1.2 !important;
+    }
+
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 1.125rem !important;
+      height: 1.125rem !important;
+      min-width: 1.125rem !important;
+      border-radius: 50% !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: rgba(255, 255, 255, 0.22) !important;
+      color: #fff !important;
+      font-weight: 700 !important;
+      font-size: 0.95rem !important;
+      line-height: 1 !important;
+      border: none !important;
+      float: none !important;
+    }
+
+    .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+      background: rgba(255, 255, 255, 0.38) !important;
+      color: #fff !important;
+    }
+
+    .select2-container--default .select2-results__option--highlighted[aria-selected] {
+      background-color: #fed7aa !important;
+      color: #7c2d12 !important;
+    }
+
+    .select2-container--default .select2-results__option[aria-selected="true"] {
+      background-color: #fff7ed !important;
+    }
+
+    .activity-type-groups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.25rem;
+      align-items: flex-end;
+    }
+
+    .activity-type-group {
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 0.85rem 1rem 1rem;
+      margin: 0;
+      min-width: 220px;
+      flex: 1 1 220px;
+      max-width: 320px;
+      background: var(--color-surface-muted);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    }
+
+    .activity-type-group legend {
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0 0.5rem;
+      color: var(--color-muted);
+    }
+
+    .activity-type-group .select2-selection--multiple {
+      min-height: 2.75rem !important;
     }
 
     .chart-container {
@@ -63,11 +261,25 @@
       height: 600px;
     }
 
+    .chart-container.panel-surface {
+      margin-top: 0;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      box-shadow: var(--shadow-sm);
+    }
+
     .total-distance {
-      font-size: 1.5em;
-      font-weight: bold;
+      font-size: 1.125rem;
+      font-weight: 700;
       text-align: center;
-      margin-bottom: 10px;
+      margin-bottom: 0;
+      padding: 0.85rem 1rem;
+      color: var(--color-fg);
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .calendar {
@@ -76,6 +288,15 @@
       gap: 4px;
       margin: 20px 0;
     }
+
+    .calendar-container {
+        margin-top: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+      }
 
     .calendar-header {
       display: grid;
@@ -226,7 +447,15 @@
     .progress-charts {
       display: flex;
       flex-direction: row;
-      gap: 30px
+      gap: 30px;
+    }
+
+    .progress-charts > .chart-wrapper {
+      background: #ffffff;
+    }
+
+    .progress-charts > .chart-wrapper > .chart-container {
+      background: #ffffff;
     }
 
     .progress-charts canvas .donut {
@@ -238,44 +467,81 @@
     }
 
     .activity-goal-toggle {
-      margin: 12px 0;
+      margin: 0;
       display: flex;
       justify-content: flex-end;
+      padding: 0.65rem 1rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
     }
 
     .activity-goal-toggle label {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      color: #444;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--color-muted);
       cursor: pointer;
+      user-select: none;
     }
 
+    .activity-goal-toggle input[type="checkbox"] {
+      width: 1rem;
+      height: 1rem;
+      border-radius: 0.25rem;
+      accent-color: var(--color-accent);
+    }
+    .progress-charts-wrapper {
+      margin-top: 0.75rem;
+      padding: 1rem 1.25rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
     .activity-goal-chart-section {
       display: none;
-      margin-top: 8px;
-      padding: 12px;
-      border-radius: 10px;
-      background: #fff;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+      margin-top: 0.75rem;
+      padding: 1rem 1.25rem;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .projection-display {
+      position: relative;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-weight: 700;
+      z-index: 10;
+      max-width: 180px;
+      text-align: center;
+      margin: 10px auto;
+      background: #FC4C02;
     }
 
     .activity-projection-display {
       margin: 10px auto;
       max-width: 180px;
       text-align: center;
-      background: rgba(46, 134, 222, 0.92);
+      background: #2e86de;
     }
 
     .goal-calculations {
       display: flex;
       justify-content: space-between;
-      background: #f8f9fa;
-      padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-size: 14px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius-md);
+      margin-bottom: 0;
+      font-size: 0.875rem;
+      box-shadow: var(--shadow-sm);
     }
 
     .goal-calculations .calc-item {
@@ -295,10 +561,6 @@
       color: #333;
     }
 
-    .date-inputs label {
-      display: none;
-    }
-
     .legend-overlay {
       display: none;
     }
@@ -314,15 +576,19 @@
     @media screen and (max-width: 500px) {
       .date-inputs {
         flex-direction: column;
-        align-items: start;
+        align-items: stretch;
       }
 
+      .date-inputs .date-field,
+      .activity-type-group,
+      .select2-container {
+        max-width: none;
+        width: 100%;
+      }
 
-      .date-inputs label {
-        display: block;
-        float: left;
-        margin-right: 10px;
-        margin-top: 8px;
+      .btn-fetch {
+        width: 100%;
+        align-self: stretch;
       }
 
 
@@ -416,6 +682,12 @@
       .calendar-container {
         width: 98vw;
         margin-left: -16px;
+        margin-top: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
       }
 
       .calendar-day {
@@ -484,9 +756,10 @@
     /* Test chartscroll input */
     .chart-wrapper {
       position: relative;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      background: var(--color-surface);
+      border: 0px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
 
@@ -527,12 +800,14 @@
       z-index: 999;
       opacity: 0;
       visibility: hidden;
+      pointer-events: none;
       transition: opacity 0.3s ease, visibility 0.3s ease;
     }
 
     .legend-overlay.visible {
       opacity: 1;
       visibility: visible;
+      pointer-events: auto;
     }
 
     .legend-header {
@@ -684,24 +959,46 @@
   <h1>Strava Activity Analysis</h1>
 
   <div class="date-inputs">
-    <div><label>After:</label><input type="text" id="fromDate" placeholder="From Date"></div>
-    <div><label>Before:</label><input type="text" id="toDate" placeholder="To Date"></div>
-    <select id="activityTypes" multiple="multiple" style="width: 300px;">
-      <option value="Run">Run</option>
-      <option value="Ride">Ride</option>
-      <option value="Swim">Swim</option>
-      <option value="Walk">Walk</option>
-      <option value="Hike">Hike</option>
-      <option value="NordicSki">Nordic Ski</option>
-    </select>
-    <button onclick="fetchData()">Fetch Data</button>
+    <div class="date-field">
+        <label for="fromDate">After</label>
+        <input type="text" id="fromDate" placeholder="From date" autocomplete="off">
+      </div>
+      <div class="date-field">
+        <label for="toDate">Before</label>
+        <input type="text" id="toDate" placeholder="To date" autocomplete="off">
+      </div>
+    <div class="activity-type-groups">
+      <fieldset class="activity-type-group">
+        <legend>Account for km goal</legend>
+        <select id="selectTypesKm" multiple="multiple">
+          <option value="Run" selected>Run</option>
+          <option value="Ride">Ride</option>
+          <option value="Swim">Swim</option>
+          <option value="Walk" selected>Walk</option>
+          <option value="Hike" selected>Hike</option>
+          <option value="NordicSki">Nordic Ski</option>
+        </select>
+      </fieldset>
+      <fieldset class="activity-type-group">
+        <legend>Account for activity goal</legend>
+        <select id="selectTypesActivity" multiple="multiple">
+          <option value="Run" selected>Run</option>
+          <option value="Ride" selected>Ride</option>
+          <option value="Swim">Swim</option>
+          <option value="Walk" selected>Walk</option>
+          <option value="Hike" selected>Hike</option>
+          <option value="NordicSki" selected>Nordic Ski</option>
+        </select>
+      </fieldset>
+    </div>
+    <button type="button" class="btn-fetch" onclick="fetchData()">Fetch Data</button>
   </div>
 
   <div class="total-distance" id="totalDistance">
     Total Distance: 0 km
   </div>
 
-  <div class="chart-container">
+  <div class="chart-container panel-surface">
     <canvas id="runChart"></canvas>
   </div>
 
@@ -734,7 +1031,7 @@
   <div class="goal-calculations" id="goalCalculations">
     <!-- Content will be populated by JavaScript -->
   </div>
-
+  <div class="progress-charts-wrapper">
   <div class="progress-charts">
     <div class="chart-wrapper">
       <div class="chart-header" id="progressChartHeader" style="display: none;">
@@ -751,11 +1048,11 @@
       <div id="yearlyProgress" style="max-width: 70%"></div>
       <canvas class="donut" id="goalDonut"></canvas>
     </div>
+  </div></div>
   </div>
-
   <div class="activity-goal-toggle">
     <label for="showActivityGoalChart">
-      <input type="checkbox" id="showActivityGoalChart">
+      <input type="checkbox" id="showActivityGoalChart" checked>
       Show yearly activity goal chart
     </label>
   </div>
@@ -900,13 +1197,40 @@
         defaultDate: tomorrow
       });
 
-      $('#activityTypes').select2({
-        placeholder: "Select activity types",
-        allowClear: true
+      $('#selectTypesKm').select2({
+        placeholder: 'Types for km goal',
+        width: '100%',
+        closeOnSelect: false,
+        dropdownParent: $('body')
       });
-      // Pre-select Run
-      $('#activityTypes').val(['Run', 'Hike', 'Walk']).trigger('change');
+      $('#selectTypesKm').val(['Run', 'Hike', 'Walk']).trigger('change');
+
+      $('#selectTypesActivity').select2({
+        placeholder: 'Types for activity goal',
+        width: '100%',
+        closeOnSelect: false,
+        dropdownParent: $('body')
+      });
+      $('#selectTypesActivity').val(['Run', 'Hike', 'Walk', 'Ride', 'NordicSki']).trigger('change');
     });
+
+    function getSelectedTypesKm() {
+      const v = $('#selectTypesKm').val();
+      return Array.isArray(v) ? v : (v ? [v] : []);
+    }
+
+    function getSelectedTypesActivity() {
+      const v = $('#selectTypesActivity').val();
+      return Array.isArray(v) ? v : (v ? [v] : []);
+    }
+
+    function typesWithRunStroller(types) {
+      const out = [...types];
+      if (types.includes('Run') && !types.includes('RunStroller')) {
+        out.push('RunStroller');
+      }
+      return [...new Set(out)];
+    }
 
     let runChart = null;
     let performanceChart = null;
@@ -919,6 +1243,19 @@
     let tooltipVisible = false;
     const ZOOM_IN_DAY_RANGE = 60;
     const chartYAxisMax = {}; // Store y-axis max per chart ID
+
+    /** Paints the chart plot area white so semi-transparent fills read correctly on gray page backgrounds. */
+    const chartAreaWhiteBackgroundPlugin = {
+      id: 'chartAreaWhiteBackground',
+      beforeDraw(chart) {
+        const { ctx, chartArea } = chart;
+        if (!chartArea || chartArea.width <= 0 || chartArea.height <= 0) return;
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        ctx.restore();
+      }
+    };
 
     function destroyExistingChart() {
       if (runChart !== null) {
@@ -952,7 +1289,14 @@
       destroyExistingChart();
 
       // Calculate total distance
-      const totalDistance = data.datasets.reduce((total, dataset) => {
+      const datasets = (data.datasets && data.datasets.length > 0)
+        ? data.datasets
+        : [{
+          label: 'Distance (km)',
+          data: (data.dates || []).map(() => 0),
+          backgroundColor: '#dddddd',
+        }];
+      const totalDistance = datasets.reduce((total, dataset) => {
         return total + dataset.data.reduce((sum, value) => sum + value, 0);
       }, 0);
       document.getElementById('totalDistance').textContent = `Total Distance: ${totalDistance.toFixed(2)} km`;
@@ -997,7 +1341,7 @@
         type: 'bar',
         data: {
           labels: data.dates,
-          datasets: data.datasets
+          datasets: datasets
         },
         options: {
           responsive: true,
@@ -1228,15 +1572,6 @@
       if (!projectionDisplay) {
         projectionDisplay = document.createElement('div');
         projectionDisplay.className = 'projection-display activity-projection-display';
-        projectionDisplay.style.cssText = `
-      position: relative;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-weight: bold;
-      z-index: 1000;
-      text-align: center;
-    `;
         activityGoalOverall.insertBefore(projectionDisplay, activityGoalOverall.children[1]);
       }
       projectionDisplay.textContent = `Projected: ${Math.round(projectedTotal)} pts`;
@@ -1246,7 +1581,8 @@
       yearEndGoal.setFullYear(yearStart.getFullYear() + 1);
 
       const maxActual = pointsProgressData.reduce((maxValue, point) => Math.max(maxValue, point.y), 0);
-      const yAxisMax = Math.max(activityGoal, projectedTotal, maxActual) * 1.1;
+      const rawActivityYMax = Math.max(activityGoal, projectedTotal, maxActual) * 1.1;
+      const yAxisMax = Math.ceil(rawActivityYMax);
 
       const progressCtx = document.getElementById('activityGoalChart').getContext('2d');
       const progressChartContainer = progressCtx.canvas.parentElement;
@@ -1271,6 +1607,7 @@
       }
       activityGoalInstance = new Chart(ctx, {
         type: 'line',
+        plugins: [chartAreaWhiteBackgroundPlugin],
         data: {
           datasets: [
             {
@@ -1325,6 +1662,12 @@
               title: {
                 display: true,
                 text: 'Activity Points'
+              },
+              ticks: {
+                callback(value) {
+                  if (!Number.isFinite(value)) return '';
+                  return Math.round(value).toLocaleString();
+                }
               }
             }
           },
@@ -1347,6 +1690,10 @@
     function updateProgressCharts(data) {
       // Check if device is mobile/touch
       const isMobile = window.innerWidth <= 500 || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+      if (!data || !Array.isArray(data.dates) || data.dates.length === 0) {
+        return;
+      }
 
       const goalDonutCtx = document.getElementById('goalDonut').getContext('2d');
       donutInstance = new Chart(goalDonutCtx, {
@@ -1454,18 +1801,6 @@
       if (!projectionDisplay) {
         projectionDisplay = document.createElement('div');
         projectionDisplay.className = 'projection-display';
-        projectionDisplay.style.cssText = `
-      position: relative;
-      background: rgba(252, 76, 2, 0.9);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-weight: bold;
-      z-index: 1000;
-      max-width: 149px;
-      text-align: center;
-      margin: 10px auto;
-    `;
         goalOverall.insertBefore(projectionDisplay, goalOverall.children[1]);
       }
       projectionDisplay.textContent = `Projected: ${Math.round(projectedTotal)} km`;
@@ -1485,8 +1820,8 @@
       if (projectedTotal > maxYValue) maxYValue = projectedTotal;
       // Ensure yearlyGoal is included
       if (data.yearlyGoal > maxYValue) maxYValue = data.yearlyGoal;
-      // Set to max + 10%
-      const yAxisMax = Math.max(maxYValue * 1.1, data.yearlyGoal * 1.1);
+      // Set to max + 10% (ceil avoids floating tick labels from FP error)
+      const yAxisMax = Math.ceil(Math.max(maxYValue * 1.1, data.yearlyGoal * 1.1));
 
       // Calculate intersection point of regression line with yearlyGoal
       // Regression: y = slope * daysSinceStart
@@ -1537,6 +1872,7 @@
       
       progressInstance = new Chart(progressCtx, {
         type: 'line',
+        plugins: [chartAreaWhiteBackgroundPlugin],
         data: {
           datasets: [
             {
@@ -1652,9 +1988,16 @@
             },
             y: {
               beginAtZero: true,
+              max: yAxisMax,
               title: {
                 display: true,
                 text: 'Distance (km)'
+              },
+              ticks: {
+                callback(value) {
+                  if (!Number.isFinite(value)) return '';
+                  return Math.round(value).toLocaleString();
+                }
               }
             }
           },
@@ -2321,20 +2664,35 @@
         console.log('fetchData already in progress, skipping...');
         return;
       }
-      
+
       isFetchingData = true;
       const fromDate = document.getElementById('fromDate').value;
       const toDate = document.getElementById('toDate').value;
-      const selectedTypes = $('#activityTypes').val();
+      const typesKm = getSelectedTypesKm();
+      const typesActivity = getSelectedTypesActivity();
 
-      // Add RunStroller to the types if Run is selected
-      const requestTypes = [...selectedTypes];
-      if (selectedTypes.includes('Run')) {
-        requestTypes.push('RunStroller');
+      if (!typesKm.length) {
+        alert('Select at least one activity type for the km goal.');
+        isFetchingData = false;
+        return;
+      }
+      if (!typesActivity.length) {
+        alert('Select at least one activity type for the activity goal.');
+        isFetchingData = false;
+        return;
       }
 
+      const activitiesQuery = new URLSearchParams({
+        after: fromDate,
+        before: toDate,
+        types_km: typesKm.join(','),
+        types_activity: typesActivity.join(','),
+      });
+
+      const perfTypes = typesWithRunStroller([...new Set([...typesKm, ...typesActivity])]);
+
       // Fetch activities data
-      const activitiesPromise = fetch(`/activities?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
+      const activitiesPromise = fetch(`/activities?${activitiesQuery.toString()}`)
         .then(response => response.json())
         .then(data => {
           if (data.error) {
@@ -2352,7 +2710,7 @@
         });
 
       // Fetch performance data with RunStroller included
-      const performancePromise = fetch(`/performance?after=${fromDate}&before=${toDate}&types=${requestTypes.join(',')}`)
+      const performancePromise = fetch(`/performance?after=${fromDate}&before=${toDate}&types=${perfTypes.join(',')}`)
         .then(response => response.json())
         .then(data => {
           if (data.error) {

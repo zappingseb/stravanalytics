@@ -11,7 +11,7 @@ A web application for analyzing and visualizing Strava activity data. This tool 
 - Performance period detection
 - Calendar view of activities
 - Progress tracking towards goals
-- Optional yearly activity-points goal chart (hidden by default)
+- Separate multi-select dropdowns for km goal vs activity-points goal types (shown by default)
 - Custom performance scoring system
 
 ## Setup
@@ -48,8 +48,7 @@ python app.py
 ## Usage
 
 1. Access the application at `http://localhost:5000`
-2. Select date range and activity types
-3. View your activity data and performance metrics
+2. Pick a date range (calendar popups), then choose activity types for **km goal** and **activity goal** in the two multi-selects (defaults: km = Run, Walk, Hike; activity = Run, Walk, Hike, Ride, Nordic Ski). Use **Fetch Data** to load charts.
 
 ## Security Note
 

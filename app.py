@@ -450,52 +450,93 @@ def get_token():
         print(f"Unexpected error during token refresh: {e}")
         return None
     
+def _parse_types_param(param_value, default_list):
+    """Split comma-separated activity types; fall back to default when empty."""
+    if not param_value or not str(param_value).strip():
+        return list(default_list)
+    return [t.strip() for t in str(param_value).split(',') if t.strip()]
+
+
+def _expand_run_stroller(types_list):
+    """Match frontend: when Run is included, also fetch/count RunStroller."""
+    out = list(dict.fromkeys(types_list))
+    if 'Run' in out and 'RunStroller' not in out:
+        out.append('RunStroller')
+    return out
+
+
 @app.route('/activities')
 def get_activities_data():
     after = request.args.get('after')
     before = request.args.get('before')
-    types = request.args.get('types', 'Run').split(',')
-    
+    types_legacy = request.args.get('types', '').strip()
+    types_km_raw = request.args.get('types_km', '').strip()
+    types_activity_raw = request.args.get('types_activity', '').strip()
+
+    default_km = ['Run', 'Hike', 'Walk']
+    default_activity = ['Run', 'Hike', 'Walk', 'Ride', 'NordicSki']
+
+    # Backward compatibility: old clients send only `types`
+    if types_legacy and not types_km_raw and not types_activity_raw:
+        types_km = _parse_types_param(types_legacy, ['Run'])
+        types_activity = list(types_km)
+    else:
+        types_km = _parse_types_param(types_km_raw, default_km)
+        types_activity = _parse_types_param(types_activity_raw, default_activity)
+
+    km_types = _expand_run_stroller(types_km)
+    activity_types = _expand_run_stroller(types_activity)
+    fetch_types = sorted(set(km_types + activity_types))
+
     token = get_token()
     if not token:
         return jsonify({'error': 'Could not get access token'})
-        
-    activities = get_activities(token, after, before, types)
+
+    activities = get_activities(token, after, before, fetch_types)
 
     if activities:
         df = pd.DataFrame(activities)
-        
+
         # Ensure date column is in datetime format
         df['date'] = pd.to_datetime(df['date'])
         # Reuse the existing scoring model for activity-goal points
         df['performance_score'] = df.apply(calculate_performance_score, axis=1)
 
-        # Group by date and type
-        daily_distance = df.groupby(['date', 'type'])['distance'].sum().reset_index()
-        
-        # Ensure dates are sorted and aligned
-        all_dates = sorted(daily_distance['date'].dt.strftime('%Y-%m-%d').unique().tolist())
-        
-        # Pivot table to align data properly
-        pivot_df = daily_distance.pivot_table(index='date', columns='type', values='distance', fill_value=0)
-        daily_activity_points = df.groupby('date')['performance_score'].sum().reindex(pivot_df.index, fill_value=0)
+        df_km = df[df['type'].isin(km_types)]
+        df_act = df[df['type'].isin(activity_types)]
+
+        all_dates = sorted(df['date'].dt.strftime('%Y-%m-%d').unique().tolist())
+        date_index = pd.to_datetime(all_dates)
 
         datasets = []
+        if not df_km.empty:
+            daily_distance = df_km.groupby(['date', 'type'])['distance'].sum().reset_index()
+            pivot_df = daily_distance.pivot_table(
+                index='date', columns='type', values='distance', fill_value=0
+            )
+            pivot_df = pivot_df.reindex(date_index, fill_value=0)
+            for activity_type in pivot_df.columns:
+                datasets.append({
+                    'label': f'{activity_type} Distance (km)',
+                    'data': pivot_df[activity_type].round(2).tolist(),
+                    'backgroundColor': colors.get(activity_type, '#999999'),
+                })
 
-        for activity_type in pivot_df.columns:
-            datasets.append({
-                'label': f'{activity_type} Distance (km)',
-                'data': pivot_df[activity_type].round(2).tolist(),
-                'backgroundColor': colors.get(activity_type, '#999999'),
-            })
+        if not df_act.empty:
+            daily_pts = df_act.groupby('date')['performance_score'].sum()
+            daily_activity_points = daily_pts.reindex(date_index, fill_value=0)
+        else:
+            daily_activity_points = pd.Series(0.0, index=date_index)
 
-        # Calculate total distance for the year
-        yearly_total = df['distance'].sum()
+        yearly_total = float(df_km['distance'].sum()) if not df_km.empty else 0.0
         yearly_goal = float(os.getenv('YEARLY_GOAL', 1000))
-        progress_percentage = (yearly_total / yearly_goal) * 100
-        yearly_activity_total = df['performance_score'].sum()
+        progress_percentage = (yearly_total / yearly_goal) * 100 if yearly_goal > 0 else 0
+
+        yearly_activity_total = float(df_act['performance_score'].sum()) if not df_act.empty else 0.0
         yearly_activity_goal = float(os.getenv('YEARLY_ACTIVITY_GOAL', 25000))
-        activity_progress_percentage = (yearly_activity_total / yearly_activity_goal) * 100 if yearly_activity_goal > 0 else 0
+        activity_progress_percentage = (
+            (yearly_activity_total / yearly_activity_goal) * 100 if yearly_activity_goal > 0 else 0
+        )
 
         data = {
             'dates': all_dates,

@@ -5,3 +5,4 @@ numpy>=2.0,<2.2
 pandas>=2.2.3
 python-dotenv>=1.0.0
 scipy
+gunicorn>=21.2.0
